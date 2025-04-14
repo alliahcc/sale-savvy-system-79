@@ -9,7 +9,6 @@ import Dashboard from "./pages/Dashboard";
 import Sales from "./pages/Sales";
 import SaleDetail from "./pages/SaleDetail";
 import Employees from "./pages/Employees";
-import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import AuthLayout from "./components/layout/AuthLayout";
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -41,7 +40,6 @@ const App = () => (
             <Route path="/sales" element={<Sales />} />
             <Route path="/sales/:id" element={<SaleDetail />} />
             <Route path="/employees" element={<Employees />} />
-            <Route path="/settings" element={<Settings />} />
           </Route>
           
           {/* Catch-all route */}

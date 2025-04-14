@@ -1,8 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { 
   Table,
   TableBody,
@@ -12,6 +11,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from '@/components/ui/use-toast';
+import { PlusIcon } from 'lucide-react';
 
 const sales = [
   {
@@ -20,8 +25,6 @@ const sales = [
     date: "2023-04-15",
     customer: "Acme Corporation",
     amount: 2592.00,
-    status: "Completed",
-    paymentStatus: "Paid"
   },
   {
     id: "2",
@@ -29,8 +32,6 @@ const sales = [
     date: "2023-04-16",
     customer: "Globex Inc.",
     amount: 1850.50,
-    status: "Completed",
-    paymentStatus: "Paid"
   },
   {
     id: "3",
@@ -38,8 +39,6 @@ const sales = [
     date: "2023-04-17",
     customer: "Stark Industries",
     amount: 4200.75,
-    status: "Pending",
-    paymentStatus: "Pending"
   },
   {
     id: "4",
@@ -47,8 +46,6 @@ const sales = [
     date: "2023-04-18",
     customer: "Wayne Enterprises",
     amount: 1750.25,
-    status: "Completed",
-    paymentStatus: "Overdue"
   },
   {
     id: "5",
@@ -56,38 +53,8 @@ const sales = [
     date: "2023-04-19",
     customer: "Umbrella Corp",
     amount: 3600.00,
-    status: "Cancelled",
-    paymentStatus: "Refunded"
   }
 ];
-
-const getSaleStatusBadge = (status: string) => {
-  switch (status) {
-    case 'Completed':
-      return <Badge className="bg-green-500">Completed</Badge>;
-    case 'Pending':
-      return <Badge variant="secondary">Pending</Badge>;
-    case 'Cancelled':
-      return <Badge variant="destructive">Cancelled</Badge>;
-    default:
-      return <Badge variant="outline">Unknown</Badge>;
-  }
-};
-
-const getPaymentStatusBadge = (status: string) => {
-  switch (status) {
-    case 'Paid':
-      return <Badge className="bg-green-500">Paid</Badge>;
-    case 'Pending':
-      return <Badge variant="secondary">Pending</Badge>;
-    case 'Overdue':
-      return <Badge variant="destructive">Overdue</Badge>;
-    case 'Refunded':
-      return <Badge variant="outline">Refunded</Badge>;
-    default:
-      return <Badge variant="outline">Unknown</Badge>;
-  }
-};
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-US', {
@@ -98,16 +65,47 @@ const formatCurrency = (amount: number) => {
 
 const Sales: React.FC = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [isNewSaleDialogOpen, setIsNewSaleDialogOpen] = useState(false);
+  const [newSale, setNewSale] = useState({
+    customer: "",
+    amount: "",
+    date: new Date().toISOString().split('T')[0]
+  });
   
   const handleViewSale = (id: string) => {
     navigate(`/sales/${id}`);
+  };
+  
+  const handleNewSaleOpen = () => {
+    setIsNewSaleDialogOpen(true);
+  };
+  
+  const handleNewSaleClose = () => {
+    setIsNewSaleDialogOpen(false);
+    setNewSale({
+      customer: "",
+      amount: "",
+      date: new Date().toISOString().split('T')[0]
+    });
+  };
+  
+  const handleNewSaleSubmit = () => {
+    // In a real app, you would save this to your database
+    toast({
+      title: "Sale created",
+      description: `New sale created for ${newSale.customer}`,
+    });
+    handleNewSaleClose();
   };
   
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">Sales</h2>
-        <Button>New Sale</Button>
+        <Button onClick={handleNewSaleOpen}>
+          <PlusIcon className="mr-2 h-4 w-4" /> New Sale
+        </Button>
       </div>
       
       <Card>
@@ -123,8 +121,6 @@ const Sales: React.FC = () => {
                 <TableHead>Date</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Payment</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -135,8 +131,6 @@ const Sales: React.FC = () => {
                   <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
                   <TableCell>{sale.customer}</TableCell>
                   <TableCell>{formatCurrency(sale.amount)}</TableCell>
-                  <TableCell>{getSaleStatusBadge(sale.status)}</TableCell>
-                  <TableCell>{getPaymentStatusBadge(sale.paymentStatus)}</TableCell>
                   <TableCell className="text-right">
                     <Button 
                       variant="outline" 
@@ -152,6 +146,69 @@ const Sales: React.FC = () => {
           </Table>
         </CardContent>
       </Card>
+      
+      <Dialog open={isNewSaleDialogOpen} onOpenChange={setIsNewSaleDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create New Sale</DialogTitle>
+            <DialogDescription>
+              Enter the details for the new sale.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="customer" className="text-right">
+                Customer
+              </Label>
+              <div className="col-span-3">
+                <Select 
+                  onValueChange={(value) => setNewSale({...newSale, customer: value})}
+                  value={newSale.customer}
+                >
+                  <SelectTrigger id="customer">
+                    <SelectValue placeholder="Select customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Acme Corporation">Acme Corporation</SelectItem>
+                    <SelectItem value="Globex Inc.">Globex Inc.</SelectItem>
+                    <SelectItem value="Stark Industries">Stark Industries</SelectItem>
+                    <SelectItem value="Wayne Enterprises">Wayne Enterprises</SelectItem>
+                    <SelectItem value="Umbrella Corp">Umbrella Corp</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="amount" className="text-right">
+                Amount
+              </Label>
+              <Input
+                id="amount"
+                type="number"
+                value={newSale.amount}
+                onChange={(e) => setNewSale({...newSale, amount: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="date" className="text-right">
+                Date
+              </Label>
+              <Input
+                id="date"
+                type="date"
+                value={newSale.date}
+                onChange={(e) => setNewSale({...newSale, date: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleNewSaleClose}>Cancel</Button>
+            <Button onClick={handleNewSaleSubmit}>Create Sale</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

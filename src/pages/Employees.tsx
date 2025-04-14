@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -12,6 +12,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from '@/components/ui/use-toast';
+import { PlusIcon } from 'lucide-react';
 
 const employees = [
   {
@@ -87,11 +93,49 @@ const getStatusBadge = (status: string) => {
 };
 
 const Employees: React.FC = () => {
+  const { toast } = useToast();
+  const [isAddEmployeeDialogOpen, setIsAddEmployeeDialogOpen] = useState(false);
+  const [newEmployee, setNewEmployee] = useState({
+    name: "",
+    email: "",
+    position: "",
+    performance: "Medium",
+    status: "Active",
+    hireDate: new Date().toISOString().split('T')[0]
+  });
+  
+  const handleAddEmployeeOpen = () => {
+    setIsAddEmployeeDialogOpen(true);
+  };
+  
+  const handleAddEmployeeClose = () => {
+    setIsAddEmployeeDialogOpen(false);
+    setNewEmployee({
+      name: "",
+      email: "",
+      position: "",
+      performance: "Medium",
+      status: "Active",
+      hireDate: new Date().toISOString().split('T')[0]
+    });
+  };
+  
+  const handleAddEmployeeSubmit = () => {
+    // In a real app, you would save this to your database
+    toast({
+      title: "Employee added",
+      description: `${newEmployee.name} has been added to the system.`,
+    });
+    handleAddEmployeeClose();
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">Employees</h2>
-        <Button>Add Employee</Button>
+        <Button onClick={handleAddEmployeeOpen}>
+          <PlusIcon className="mr-2 h-4 w-4" /> Add Employee
+        </Button>
       </div>
       
       <Card>
@@ -138,6 +182,113 @@ const Employees: React.FC = () => {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={isAddEmployeeDialogOpen} onOpenChange={setIsAddEmployeeDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Employee</DialogTitle>
+            <DialogDescription>
+              Enter the details for the new employee.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Full Name
+              </Label>
+              <Input
+                id="name"
+                value={newEmployee.name}
+                onChange={(e) => setNewEmployee({...newEmployee, name: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="email" className="text-right">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={newEmployee.email}
+                onChange={(e) => setNewEmployee({...newEmployee, email: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="position" className="text-right">
+                Position
+              </Label>
+              <Select 
+                onValueChange={(value) => setNewEmployee({...newEmployee, position: value})}
+                value={newEmployee.position}
+              >
+                <SelectTrigger id="position" className="col-span-3">
+                  <SelectValue placeholder="Select position" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Sales Manager">Sales Manager</SelectItem>
+                  <SelectItem value="Sales Representative">Sales Representative</SelectItem>
+                  <SelectItem value="Sales Assistant">Sales Assistant</SelectItem>
+                  <SelectItem value="Regional Sales Manager">Regional Sales Manager</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="performance" className="text-right">
+                Performance
+              </Label>
+              <Select 
+                onValueChange={(value) => setNewEmployee({...newEmployee, performance: value})}
+                value={newEmployee.performance}
+              >
+                <SelectTrigger id="performance" className="col-span-3">
+                  <SelectValue placeholder="Select performance" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="High">High</SelectItem>
+                  <SelectItem value="Medium">Medium</SelectItem>
+                  <SelectItem value="Low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="status" className="text-right">
+                Status
+              </Label>
+              <Select 
+                onValueChange={(value) => setNewEmployee({...newEmployee, status: value})}
+                value={newEmployee.status}
+              >
+                <SelectTrigger id="status" className="col-span-3">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="On Leave">On Leave</SelectItem>
+                  <SelectItem value="Inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="hireDate" className="text-right">
+                Hire Date
+              </Label>
+              <Input
+                id="hireDate"
+                type="date"
+                value={newEmployee.hireDate}
+                onChange={(e) => setNewEmployee({...newEmployee, hireDate: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleAddEmployeeClose}>Cancel</Button>
+            <Button onClick={handleAddEmployeeSubmit}>Add Employee</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

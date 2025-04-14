@@ -1,11 +1,9 @@
-
 import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
   BarChart3, 
   ShoppingCart, 
   Users, 
-  Settings, 
   LogOut, 
   Menu, 
   X,
@@ -65,11 +63,6 @@ const DashboardLayout: React.FC = () => {
       name: 'Employees',
       path: '/employees',
       icon: <Users className="h-5 w-5" />
-    },
-    {
-      name: 'Settings',
-      path: '/settings',
-      icon: <Settings className="h-5 w-5" />
     }
   ];
 
@@ -95,7 +88,6 @@ const DashboardLayout: React.FC = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  // Get user initials for avatar
   const getUserInitials = () => {
     if (!user) return 'U';
     
@@ -110,14 +102,12 @@ const DashboardLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen flex bg-gray-50">
-      {/* Sidebar */}
       <aside 
         className={cn(
           "bg-sidebar text-sidebar-foreground w-64 flex-shrink-0 transition-all duration-300 fixed md:relative h-screen z-50 shadow-lg",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0 md:w-20"
         )}
       >
-        {/* Sidebar Header */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-sidebar-border">
           <div className={cn("flex items-center gap-2", !isSidebarOpen && "md:justify-center md:w-full")}>
             <TrendingUp className="h-6 w-6 text-sale" />
@@ -130,7 +120,6 @@ const DashboardLayout: React.FC = () => {
           )}
         </div>
         
-        {/* Navigation */}
         <nav className="p-4">
           <ul className="space-y-2">
             {navigationItems.map((item) => (
@@ -151,7 +140,6 @@ const DashboardLayout: React.FC = () => {
           </ul>
         </nav>
         
-        {/* Sidebar Footer */}
         <div className="absolute bottom-0 w-full p-4 border-t border-sidebar-border">
           <Button 
             variant="ghost" 
@@ -167,9 +155,7 @@ const DashboardLayout: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
         <header className="bg-white h-16 flex items-center justify-between px-4 border-b shadow-sm">
           <div className="flex items-center">
             {isMobile && (
@@ -189,7 +175,6 @@ const DashboardLayout: React.FC = () => {
           </div>
         </header>
         
-        {/* Content */}
         <main className="flex-1 p-6 overflow-auto">
           <Outlet />
         </main>
