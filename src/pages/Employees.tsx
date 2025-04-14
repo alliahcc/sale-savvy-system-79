@@ -11,86 +11,61 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { PlusIcon } from 'lucide-react';
 
+// Updated employee data structure
 const employees = [
   {
     id: "1",
+    empId: "EMP001",
     name: "John Smith",
     position: "Sales Manager",
     department: "Sales",
     email: "john.smith@example.com",
-    performance: "High",
-    hireDate: "2020-05-12",
-    status: "Active"
+    hireDate: "2020-05-12"
   },
   {
     id: "2",
+    empId: "EMP002",
     name: "Sarah Johnson",
     position: "Sales Representative",
     department: "Sales",
     email: "sarah.johnson@example.com",
-    performance: "Medium",
-    hireDate: "2021-02-18",
-    status: "Active"
+    hireDate: "2021-02-18"
   },
   {
     id: "3",
+    empId: "EMP003",
     name: "Michael Brown",
     position: "Sales Representative",
-    department: "Sales",
+    department: "Marketing",
     email: "michael.brown@example.com",
-    performance: "High",
-    hireDate: "2019-11-03",
-    status: "Active"
+    hireDate: "2019-11-03"
   },
   {
     id: "4",
+    empId: "EMP004",
     name: "Emily Davis",
     position: "Sales Assistant",
-    department: "Sales",
+    department: "Customer Support",
     email: "emily.davis@example.com",
-    performance: "Medium",
-    hireDate: "2022-01-10",
-    status: "On Leave"
+    hireDate: "2022-01-10"
   },
   {
     id: "5",
+    empId: "EMP005",
     name: "David Wilson",
     position: "Regional Sales Manager",
-    department: "Sales",
+    department: "Executive",
     email: "david.wilson@example.com",
-    performance: "High",
-    hireDate: "2018-07-22",
-    status: "Active"
+    hireDate: "2018-07-22"
   }
 ];
-
-const getPerformanceBadge = (performance: string) => {
-  if (performance === "High") {
-    return <Badge className="bg-green-500">High</Badge>;
-  } else if (performance === "Medium") {
-    return <Badge variant="secondary">Medium</Badge>;
-  } else {
-    return <Badge variant="outline" className="text-muted-foreground">Low</Badge>;
-  }
-};
-
-const getStatusBadge = (status: string) => {
-  if (status === "Active") {
-    return <Badge className="bg-green-500">Active</Badge>;
-  } else if (status === "On Leave") {
-    return <Badge variant="secondary">On Leave</Badge>;
-  } else {
-    return <Badge variant="destructive">Inactive</Badge>;
-  }
-};
 
 const Employees: React.FC = () => {
   const { toast } = useToast();
@@ -99,8 +74,8 @@ const Employees: React.FC = () => {
     name: "",
     email: "",
     position: "",
-    performance: "Medium",
-    status: "Active",
+    department: "Sales",
+    empId: "EMP" + Math.floor(1000 + Math.random() * 9000),
     hireDate: new Date().toISOString().split('T')[0]
   });
   
@@ -114,14 +89,13 @@ const Employees: React.FC = () => {
       name: "",
       email: "",
       position: "",
-      performance: "Medium",
-      status: "Active",
+      department: "Sales",
+      empId: "EMP" + Math.floor(1000 + Math.random() * 9000),
       hireDate: new Date().toISOString().split('T')[0]
     });
   };
   
   const handleAddEmployeeSubmit = () => {
-    // In a real app, you would save this to your database
     toast({
       title: "Employee added",
       description: `${newEmployee.name} has been added to the system.`,
@@ -148,9 +122,9 @@ const Employees: React.FC = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Employee</TableHead>
+                <TableHead>Employee ID</TableHead>
                 <TableHead>Position</TableHead>
-                <TableHead>Performance</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Department</TableHead>
                 <TableHead>Hire Date</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -169,9 +143,9 @@ const Employees: React.FC = () => {
                       <div className="text-sm text-muted-foreground">{employee.email}</div>
                     </div>
                   </TableCell>
+                  <TableCell>{employee.empId}</TableCell>
                   <TableCell>{employee.position}</TableCell>
-                  <TableCell>{getPerformanceBadge(employee.performance)}</TableCell>
-                  <TableCell>{getStatusBadge(employee.status)}</TableCell>
+                  <TableCell>{employee.department}</TableCell>
                   <TableCell>{new Date(employee.hireDate).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="outline" size="sm">View</Button>
@@ -192,6 +166,17 @@ const Employees: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="empId" className="text-right">
+                Employee ID
+              </Label>
+              <Input
+                id="empId"
+                value={newEmployee.empId}
+                onChange={(e) => setNewEmployee({...newEmployee, empId: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="name" className="text-right">
                 Full Name
@@ -235,38 +220,21 @@ const Employees: React.FC = () => {
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="performance" className="text-right">
-                Performance
+              <Label htmlFor="department" className="text-right">
+                Department
               </Label>
               <Select 
-                onValueChange={(value) => setNewEmployee({...newEmployee, performance: value})}
-                value={newEmployee.performance}
+                onValueChange={(value) => setNewEmployee({...newEmployee, department: value})}
+                value={newEmployee.department}
               >
-                <SelectTrigger id="performance" className="col-span-3">
-                  <SelectValue placeholder="Select performance" />
+                <SelectTrigger id="department" className="col-span-3">
+                  <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="High">High</SelectItem>
-                  <SelectItem value="Medium">Medium</SelectItem>
-                  <SelectItem value="Low">Low</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="status" className="text-right">
-                Status
-              </Label>
-              <Select 
-                onValueChange={(value) => setNewEmployee({...newEmployee, status: value})}
-                value={newEmployee.status}
-              >
-                <SelectTrigger id="status" className="col-span-3">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="On Leave">On Leave</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
+                  <SelectItem value="Sales">Sales</SelectItem>
+                  <SelectItem value="Marketing">Marketing</SelectItem>
+                  <SelectItem value="Executive">Executive</SelectItem>
+                  <SelectItem value="Customer Support">Customer Support</SelectItem>
                 </SelectContent>
               </Select>
             </div>
