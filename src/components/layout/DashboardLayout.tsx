@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
   BarChart3, 
@@ -16,13 +16,39 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { supabase } from '@/integrations/supabase/client';
+import { User } from '@supabase/supabase-js';
 
 const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const [isSidebarOpen, setIsSidebarOpen] = React.useState(!isMobile);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
+  const [user, setUser] = useState<User | null>(null);
+  
+  useEffect(() => {
+    // Get current user
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    
+    fetchUser();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          navigate('/');
+        } else if (session) {
+          setUser(session.user);
+        }
+      }
+    );
+    
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   const navigationItems = [
     {
@@ -47,17 +73,39 @@ const DashboardLayout: React.FC = () => {
     }
   ];
 
-  const handleLogout = () => {
-    localStorage.removeItem('isAuthenticated');
-    toast({
-      title: 'Logged out',
-      description: 'You have been successfully logged out'
-    });
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      toast({
+        title: 'Logged out',
+        description: 'You have been successfully logged out'
+      });
+      navigate('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to log out. Please try again.',
+        variant: 'destructive'
+      });
+    }
   };
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (!user) return 'U';
+    
+    const fullName = user.user_metadata?.full_name || user.email || '';
+    if (!fullName) return 'U';
+    
+    return fullName.split(' ')
+      .map(name => name.charAt(0).toUpperCase())
+      .slice(0, 2)
+      .join('');
   };
 
   return (
@@ -136,7 +184,7 @@ const DashboardLayout: React.FC = () => {
           <div className="flex items-center gap-4">
             <Avatar>
               <AvatarImage src="" />
-              <AvatarFallback>JD</AvatarFallback>
+              <AvatarFallback>{getUserInitials()}</AvatarFallback>
             </Avatar>
           </div>
         </header>

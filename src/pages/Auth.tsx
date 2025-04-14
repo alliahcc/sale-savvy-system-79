@@ -2,16 +2,18 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AuthForm from '@/components/auth/AuthForm';
+import { supabase } from '@/integrations/supabase/client';
 
 const Auth: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
     // Check if user is already authenticated
-    const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
-    if (isAuthenticated) {
-      navigate('/dashboard');
-    }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate('/dashboard');
+      }
+    });
   }, [navigate]);
 
   return (

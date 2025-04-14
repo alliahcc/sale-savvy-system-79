@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { ChevronRight } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const AuthForm: React.FC = () => {
   const { toast } = useToast();
@@ -37,7 +38,7 @@ const AuthForm: React.FC = () => {
     setSignupData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
@@ -63,20 +64,34 @@ const AuthForm: React.FC = () => {
       return;
     }
 
-    // Simulate login
-    setTimeout(() => {
-      // In a real app, you would validate against a backend
-      localStorage.setItem("isAuthenticated", "true");
+    try {
+      // Sign in with Supabase
+      const { error } = await supabase.auth.signInWithPassword({
+        email: loginData.email,
+        password: loginData.password
+      });
+
+      if (error) throw error;
+
       toast({
         title: "Login successful",
-        description: "Welcome back to Sales Savvy!",
+        description: "Welcome back to SaleSavvy!"
       });
+
       navigate("/dashboard");
+    } catch (error: any) {
+      toast({
+        title: "Login failed",
+        description: error.message || "An error occurred during login",
+        variant: "destructive"
+      });
+      console.error("Login error:", error);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
@@ -124,17 +139,36 @@ const AuthForm: React.FC = () => {
       return;
     }
 
-    // Simulate signup
-    setTimeout(() => {
-      // In a real app, you would create an account with a backend
-      localStorage.setItem("isAuthenticated", "true");
+    try {
+      // Sign up with Supabase
+      const { error } = await supabase.auth.signUp({
+        email: signupData.email,
+        password: signupData.password,
+        options: {
+          data: {
+            full_name: signupData.name
+          }
+        }
+      });
+
+      if (error) throw error;
+
       toast({
         title: "Account created",
-        description: "Welcome to Sales Savvy!",
+        description: "Welcome to SaleSavvy! You may need to verify your email address."
       });
+      
       navigate("/dashboard");
+    } catch (error: any) {
+      toast({
+        title: "Signup failed",
+        description: error.message || "An error occurred during signup",
+        variant: "destructive"
+      });
+      console.error("Signup error:", error);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
