@@ -15,8 +15,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { PlusIcon } from 'lucide-react';
+import ProductList from '@/components/ProductList';
 
 const sales = [
   {
@@ -108,7 +109,7 @@ const Sales: React.FC = () => {
         </Button>
       </div>
       
-      <Card>
+      <Card className="mb-6">
         <CardHeader>
           <CardTitle>Sales History</CardTitle>
           <CardDescription>Manage and view all sales transactions</CardDescription>
@@ -146,6 +147,9 @@ const Sales: React.FC = () => {
           </Table>
         </CardContent>
       </Card>
+      
+      {/* Add the ProductList component */}
+      <ProductList />
       
       <Dialog open={isNewSaleDialogOpen} onOpenChange={setIsNewSaleDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
