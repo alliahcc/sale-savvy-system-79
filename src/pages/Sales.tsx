@@ -246,7 +246,7 @@ const Sales: React.FC = () => {
       </Card>
 
       <Dialog open={isNewSaleDialogOpen} onOpenChange={setIsNewSaleDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[800px]">
           <DialogHeader>
             <DialogTitle>Create New Sale</DialogTitle>
             <DialogDescription>
@@ -260,7 +260,7 @@ const Sales: React.FC = () => {
               </Label>
               <div className="col-span-3">
                 <Input 
-                  placeholder="Search customers..." 
+                  placeholder={newSale.customer || "Search customers..."}
                   value={customerSearch}
                   onChange={(e) => setCustomerSearch(e.target.value)}
                 />
@@ -274,7 +274,7 @@ const Sales: React.FC = () => {
                             key={customer.custno}
                             onSelect={() => {
                               setNewSale({...newSale, customer: customer.custname || ''});
-                              setCustomerSearch("");
+                              setCustomerSearch('');
                             }}
                           >
                             {customer.custname}
