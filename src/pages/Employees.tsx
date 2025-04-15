@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   Table,
   TableBody,
@@ -25,7 +25,6 @@ const employees = [
     name: "John Smith",
     position: "Sales Manager",
     department: "Sales",
-    email: "john.smith@example.com",
     hireDate: "2020-05-12"
   },
   {
@@ -118,8 +117,8 @@ const Employees: React.FC = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Employee</TableHead>
                 <TableHead>Employee ID</TableHead>
+                <TableHead>Employee</TableHead>
                 <TableHead>Position</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Hire Date</TableHead>
@@ -129,17 +128,15 @@ const Employees: React.FC = () => {
             <TableBody>
               {employees.map((employee) => (
                 <TableRow key={employee.id}>
+                  <TableCell>{employee.empId}</TableCell>
                   <TableCell className="flex items-center gap-3">
                     <Avatar>
                       <AvatarFallback>
                         {employee.name.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
-                      <div className="font-medium">{employee.name}</div>
-                    </div>
+                    <div className="font-medium">{employee.name}</div>
                   </TableCell>
-                  <TableCell>{employee.empId}</TableCell>
                   <TableCell>{employee.position}</TableCell>
                   <TableCell>{employee.department}</TableCell>
                   <TableCell>{new Date(employee.hireDate).toLocaleDateString()}</TableCell>

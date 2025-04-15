@@ -15,28 +15,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
-import { PlusIcon } from 'lucide-react';
+import { PlusIcon, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2 } from 'lucide-react';
-import ProductList from '@/components/ProductList';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// Enhanced sales data structure
-type SalesData = {
-  id: string;
-  transactionNumber: string;
-  date: string;
-  customer: string;
-  employee: string;
-  unitPrice: number;
-  currentPrice: number;
-  amount: number;
-};
-
-// Mock data for initial rendering
-const mockSales: SalesData[] = [
+// Updated sales data structure with formatted sale numbers
+const mockSales = [
   {
     id: "1",
-    transactionNumber: "INV-2023-0042",
+    saleNumber: "SALE 001",
     date: "2023-04-15",
     customer: "Acme Corporation",
     employee: "John Smith",
@@ -46,7 +34,7 @@ const mockSales: SalesData[] = [
   },
   {
     id: "2",
-    transactionNumber: "INV-2023-0043",
+    saleNumber: "SALE 002",
     date: "2023-04-16",
     customer: "Globex Inc.",
     employee: "Sarah Johnson",
@@ -56,7 +44,7 @@ const mockSales: SalesData[] = [
   },
   {
     id: "3",
-    transactionNumber: "INV-2023-0044",
+    saleNumber: "SALE 003",
     date: "2023-04-17",
     customer: "Stark Industries",
     employee: "Michael Brown",
@@ -66,7 +54,7 @@ const mockSales: SalesData[] = [
   },
   {
     id: "4",
-    transactionNumber: "INV-2023-0045",
+    saleNumber: "SALE 004",
     date: "2023-04-18",
     customer: "Wayne Enterprises",
     employee: "Emily Davis",
@@ -76,7 +64,7 @@ const mockSales: SalesData[] = [
   },
   {
     id: "5",
-    transactionNumber: "INV-2023-0046",
+    saleNumber: "SALE 005",
     date: "2023-04-19",
     customer: "Umbrella Corp",
     employee: "David Wilson",
@@ -97,44 +85,73 @@ const Sales: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isNewSaleDialogOpen, setIsNewSaleDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [openCustomer, setOpenCustomer] = useState(false);
+  const [openEmployee, setOpenEmployee] = useState(false);
+  const [openProduct, setOpenProduct] = useState(false);
+  
   const [newSale, setNewSale] = useState({
     customer: "",
     employee: "",
-    unitPrice: "",
-    currentPrice: "",
+    product: "",
+    unitPrice: 0,
+    currentPrice: 0,
     amount: "",
     date: new Date().toISOString().split('T')[0]
   });
-  const [sales, setSales] = useState<SalesData[]>(mockSales);
-  const [loading, setLoading] = useState(false);
-  
-  // Fetch real sales data from Supabase
+
+  const [sales, setSales] = useState(mockSales);
+
+  // Fetch data on component mount
   useEffect(() => {
-    const fetchSalesData = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
+        const [productsData, customersData, employeesData] = await Promise.all([
+          supabase.from('product').select('*'),
+          supabase.from('customer').select('*'),
+          supabase.from('employee').select('*')
+        ]);
         
-        // This is a placeholder - in a real application, you would:
-        // 1. Fetch sales data, joining with customer and employee tables
-        // 2. Fetch product pricing data
-        // 3. Combine the data to show the requested information
-        
-        // For now, we'll just use the mock data
-        setSales(mockSales);
+        if (productsData.data) setProducts(productsData.data);
+        if (customersData.data) setCustomers(customersData.data);
+        if (employeesData.data) setEmployees(employeesData.data);
       } catch (error) {
-        console.error('Error fetching sales data:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load sales data",
-          variant: "destructive",
-        });
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
-    
-    fetchSalesData();
-  }, [toast]);
+
+    fetchData();
+  }, []);
+
+  const handleProductSelect = async (productCode: string) => {
+    try {
+      // Get the latest price for the selected product
+      const { data: priceData } = await supabase
+        .from('pricehist')
+        .select('unitprice')
+        .eq('prodcode', productCode)
+        .order('effdate', { ascending: false })
+        .limit(1);
+
+      if (priceData && priceData.length > 0) {
+        setNewSale(prev => ({
+          ...prev,
+          product: productCode,
+          unitPrice: priceData[0].unitprice,
+          currentPrice: priceData[0].unitprice
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching product price:', error);
+    }
+  };
   
   const handleViewSale = (id: string) => {
     navigate(`/sales/${id}`);
@@ -149,8 +166,9 @@ const Sales: React.FC = () => {
     setNewSale({
       customer: "",
       employee: "",
-      unitPrice: "",
-      currentPrice: "",
+      product: "",
+      unitPrice: 0,
+      currentPrice: 0,
       amount: "",
       date: new Date().toISOString().split('T')[0]
     });
@@ -179,54 +197,38 @@ const Sales: React.FC = () => {
           <CardDescription>Manage and view all sales transactions</CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex justify-center items-center p-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Sales No</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Unit Price</TableHead>
-                  <TableHead>Current Price</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Sales No</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Employee</TableHead>
+                <TableHead>Unit Price</TableHead>
+                <TableHead>Current Price</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sales.map((sale) => (
+                <TableRow key={sale.id}>
+                  <TableCell>{sale.saleNumber}</TableCell>
+                  <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
+                  <TableCell>{sale.customer}</TableCell>
+                  <TableCell>{sale.employee}</TableCell>
+                  <TableCell>{formatCurrency(sale.unitPrice)}</TableCell>
+                  <TableCell>{formatCurrency(sale.currentPrice)}</TableCell>
+                  <TableCell>{formatCurrency(sale.amount)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="outline" size="sm" onClick={() => handleViewSale(sale.id)}>
+                      View
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sales.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-4">No sales found</TableCell>
-                  </TableRow>
-                ) : (
-                  sales.map((sale) => (
-                    <TableRow key={sale.id}>
-                      <TableCell className="font-medium">{sale.transactionNumber}</TableCell>
-                      <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
-                      <TableCell>{sale.customer}</TableCell>
-                      <TableCell>{sale.employee}</TableCell>
-                      <TableCell>{formatCurrency(sale.unitPrice)}</TableCell>
-                      <TableCell>{formatCurrency(sale.currentPrice)}</TableCell>
-                      <TableCell>{formatCurrency(sale.amount)}</TableCell>
-                      <TableCell className="text-right">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => handleViewSale(sale.id)}
-                        >
-                          View
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          )}
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
@@ -244,44 +246,101 @@ const Sales: React.FC = () => {
                 Customer
               </Label>
               <div className="col-span-3">
-                <Select 
-                  onValueChange={(value) => setNewSale({...newSale, customer: value})}
-                  value={newSale.customer}
-                >
-                  <SelectTrigger id="customer">
-                    <SelectValue placeholder="Select customer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Acme Corporation">Acme Corporation</SelectItem>
-                    <SelectItem value="Globex Inc.">Globex Inc.</SelectItem>
-                    <SelectItem value="Stark Industries">Stark Industries</SelectItem>
-                    <SelectItem value="Wayne Enterprises">Wayne Enterprises</SelectItem>
-                    <SelectItem value="Umbrella Corp">Umbrella Corp</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Popover open={openCustomer} onOpenChange={setOpenCustomer}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start">
+                      {newSale.customer || "Select customer..."}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0" side="bottom" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search customers..." />
+                      <CommandEmpty>No customer found.</CommandEmpty>
+                      <CommandGroup>
+                        {customers.map((customer) => (
+                          <CommandItem
+                            key={customer.custno}
+                            onSelect={() => {
+                              setNewSale({...newSale, customer: customer.custname});
+                              setOpenCustomer(false);
+                            }}
+                          >
+                            {customer.custname}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="employee" className="text-right">
                 Employee
               </Label>
               <div className="col-span-3">
-                <Select 
-                  onValueChange={(value) => setNewSale({...newSale, employee: value})}
-                  value={newSale.employee}
-                >
-                  <SelectTrigger id="employee">
-                    <SelectValue placeholder="Select employee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="John Smith">John Smith</SelectItem>
-                    <SelectItem value="Sarah Johnson">Sarah Johnson</SelectItem>
-                    <SelectItem value="Michael Brown">Michael Brown</SelectItem>
-                    <SelectItem value="Emily Davis">Emily Davis</SelectItem>
-                    <SelectItem value="David Wilson">David Wilson</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Popover open={openEmployee} onOpenChange={setOpenEmployee}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start">
+                      {newSale.employee || "Select employee..."}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0" side="bottom" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search employees..." />
+                      <CommandEmpty>No employee found.</CommandEmpty>
+                      <CommandGroup>
+                        {employees.map((employee) => (
+                          <CommandItem
+                            key={employee.empno}
+                            onSelect={() => {
+                              setNewSale({...newSale, employee: `${employee.firstname} ${employee.lastname}`});
+                              setOpenEmployee(false);
+                            }}
+                          >
+                            {`${employee.firstname} ${employee.lastname}`}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="product" className="text-right">
+                Product
+              </Label>
+              <div className="col-span-3">
+                <Popover open={openProduct} onOpenChange={setOpenProduct}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start">
+                      {selectedProduct?.description || "Select product..."}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0" side="bottom" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search products..." />
+                      <CommandEmpty>No product found.</CommandEmpty>
+                      <CommandGroup>
+                        {products.map((product) => (
+                          <CommandItem
+                            key={product.prodcode}
+                            onSelect={() => {
+                              setSelectedProduct(product);
+                              handleProductSelect(product.prodcode);
+                              setOpenProduct(false);
+                            }}
+                          >
+                            {product.description}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
@@ -291,10 +350,9 @@ const Sales: React.FC = () => {
               </Label>
               <Input
                 id="unitPrice"
-                type="number"
                 value={newSale.unitPrice}
-                onChange={(e) => setNewSale({...newSale, unitPrice: e.target.value})}
                 className="col-span-3"
+                disabled
               />
             </div>
 
@@ -304,10 +362,9 @@ const Sales: React.FC = () => {
               </Label>
               <Input
                 id="currentPrice"
-                type="number"
                 value={newSale.currentPrice}
-                onChange={(e) => setNewSale({...newSale, currentPrice: e.target.value})}
                 className="col-span-3"
+                disabled
               />
             </div>
 
