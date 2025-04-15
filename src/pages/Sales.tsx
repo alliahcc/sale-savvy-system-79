@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from '@/hooks/use-toast';
 import { PlusIcon, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const mockSales = [
@@ -346,56 +346,6 @@ const Sales: React.FC = () => {
                   </CommandList>
                 </Command>
               </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="unitPrice" className="text-right">
-                Unit Price
-              </Label>
-              <Input
-                id="unitPrice"
-                value={newSale.unitPrice}
-                className="col-span-3"
-                disabled
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="currentPrice" className="text-right">
-                Current Price
-              </Label>
-              <Input
-                id="currentPrice"
-                value={newSale.currentPrice}
-                className="col-span-3"
-                disabled
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right">
-                Amount
-              </Label>
-              <Input
-                id="amount"
-                type="number"
-                value={newSale.amount}
-                onChange={(e) => setNewSale({...newSale, amount: e.target.value})}
-                className="col-span-3"
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="date" className="text-right">
-                Date
-              </Label>
-              <Input
-                id="date"
-                type="date"
-                value={newSale.date}
-                onChange={(e) => setNewSale({...newSale, date: e.target.value})}
-                className="col-span-3"
-              />
             </div>
           </div>
           <DialogFooter>
