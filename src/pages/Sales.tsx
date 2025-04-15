@@ -259,29 +259,31 @@ const Sales: React.FC = () => {
                 Customer
               </Label>
               <div className="col-span-3">
-                <Command className="rounded-lg border shadow-md">
-                  <CommandInput 
-                    placeholder="Search customers..." 
-                    value={customerSearch}
-                    onValueChange={setCustomerSearch}
-                  />
-                  <CommandList>
-                    <CommandEmpty>No customer found.</CommandEmpty>
-                    <CommandGroup>
-                      {filteredCustomers.map((customer) => (
-                        <CommandItem
-                          key={customer.custno}
-                          onSelect={() => {
-                            setNewSale({...newSale, customer: customer.custname || ''});
-                            setCustomerSearch("");
-                          }}
-                        >
-                          {customer.custname}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
+                <Input 
+                  placeholder="Search customers..." 
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                />
+                {customerSearch && (
+                  <Command className="rounded-lg border shadow-md mt-2">
+                    <CommandList>
+                      <CommandEmpty>No customer found.</CommandEmpty>
+                      <CommandGroup>
+                        {filteredCustomers.map((customer) => (
+                          <CommandItem
+                            key={customer.custno}
+                            onSelect={() => {
+                              setNewSale({...newSale, customer: customer.custname || ''});
+                              setCustomerSearch("");
+                            }}
+                          >
+                            {customer.custname}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                )}
               </div>
             </div>
 
@@ -290,29 +292,31 @@ const Sales: React.FC = () => {
                 Employee
               </Label>
               <div className="col-span-3">
-                <Command className="rounded-lg border shadow-md">
-                  <CommandInput 
-                    placeholder="Search employees..." 
-                    value={employeeSearch}
-                    onValueChange={setEmployeeSearch}
-                  />
-                  <CommandList>
-                    <CommandEmpty>No employee found.</CommandEmpty>
-                    <CommandGroup>
-                      {filteredEmployees.map((employee) => (
-                        <CommandItem
-                          key={employee.empno}
-                          onSelect={() => {
-                            setNewSale({...newSale, employee: `${employee.firstname} ${employee.lastname}`});
-                            setEmployeeSearch("");
-                          }}
-                        >
-                          {`${employee.firstname} ${employee.lastname}`}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
+                <Input 
+                  placeholder="Search employees..." 
+                  value={employeeSearch}
+                  onChange={(e) => setEmployeeSearch(e.target.value)}
+                />
+                {employeeSearch && (
+                  <Command className="rounded-lg border shadow-md mt-2">
+                    <CommandList>
+                      <CommandEmpty>No employee found.</CommandEmpty>
+                      <CommandGroup>
+                        {filteredEmployees.map((employee) => (
+                          <CommandItem
+                            key={employee.empno}
+                            onSelect={() => {
+                              setNewSale({...newSale, employee: `${employee.firstname} ${employee.lastname}`});
+                              setEmployeeSearch("");
+                            }}
+                          >
+                            {`${employee.firstname} ${employee.lastname}`}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                )}
               </div>
             </div>
 
@@ -321,31 +325,83 @@ const Sales: React.FC = () => {
                 Product
               </Label>
               <div className="col-span-3">
-                <Command className="rounded-lg border shadow-md">
-                  <CommandInput 
-                    placeholder="Search products..." 
-                    value={productSearch}
-                    onValueChange={setProductSearch}
-                  />
-                  <CommandList>
-                    <CommandEmpty>No product found.</CommandEmpty>
-                    <CommandGroup>
-                      {filteredProducts.map((product) => (
-                        <CommandItem
-                          key={product.prodcode}
-                          onSelect={() => {
-                            setSelectedProduct(product);
-                            handleProductSelect(product.prodcode);
-                            setProductSearch("");
-                          }}
-                        >
-                          {product.description}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
+                <Input 
+                  placeholder="Search products..." 
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                />
+                {productSearch && (
+                  <Command className="rounded-lg border shadow-md mt-2">
+                    <CommandList>
+                      <CommandEmpty>No product found.</CommandEmpty>
+                      <CommandGroup>
+                        {filteredProducts.map((product) => (
+                          <CommandItem
+                            key={product.prodcode}
+                            onSelect={() => {
+                              setSelectedProduct(product);
+                              handleProductSelect(product.prodcode);
+                              setProductSearch("");
+                            }}
+                          >
+                            {product.description}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                )}
               </div>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="unitPrice" className="text-right">
+                Unit Price
+              </Label>
+              <Input
+                id="unitPrice"
+                value={newSale.unitPrice}
+                className="col-span-3"
+                disabled
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="currentPrice" className="text-right">
+                Current Price
+              </Label>
+              <Input
+                id="currentPrice"
+                value={newSale.currentPrice}
+                className="col-span-3"
+                disabled
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="amount" className="text-right">
+                Amount
+              </Label>
+              <Input
+                id="amount"
+                type="number"
+                value={newSale.amount}
+                onChange={(e) => setNewSale({...newSale, amount: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="date" className="text-right">
+                Date
+              </Label>
+              <Input
+                id="date"
+                type="date"
+                value={newSale.date}
+                onChange={(e) => setNewSale({...newSale, date: e.target.value})}
+                className="col-span-3"
+              />
             </div>
           </div>
           <DialogFooter>
