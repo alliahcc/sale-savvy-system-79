@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -100,6 +99,9 @@ const Sales: React.FC = () => {
   const [isNewSaleDialogOpen, setIsNewSaleDialogOpen] = useState(false);
   const [newSale, setNewSale] = useState({
     customer: "",
+    employee: "",
+    unitPrice: "",
+    currentPrice: "",
     amount: "",
     date: new Date().toISOString().split('T')[0]
   });
@@ -146,6 +148,9 @@ const Sales: React.FC = () => {
     setIsNewSaleDialogOpen(false);
     setNewSale({
       customer: "",
+      employee: "",
+      unitPrice: "",
+      currentPrice: "",
       amount: "",
       date: new Date().toISOString().split('T')[0]
     });
@@ -168,7 +173,7 @@ const Sales: React.FC = () => {
         </Button>
       </div>
       
-      <Card className="mb-6">
+      <Card>
         <CardHeader>
           <CardTitle>Sales History</CardTitle>
           <CardDescription>Manage and view all sales transactions</CardDescription>
@@ -224,10 +229,7 @@ const Sales: React.FC = () => {
           )}
         </CardContent>
       </Card>
-      
-      {/* Include ProductList component */}
-      <ProductList />
-      
+
       <Dialog open={isNewSaleDialogOpen} onOpenChange={setIsNewSaleDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -259,6 +261,56 @@ const Sales: React.FC = () => {
                 </Select>
               </div>
             </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="employee" className="text-right">
+                Employee
+              </Label>
+              <div className="col-span-3">
+                <Select 
+                  onValueChange={(value) => setNewSale({...newSale, employee: value})}
+                  value={newSale.employee}
+                >
+                  <SelectTrigger id="employee">
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="John Smith">John Smith</SelectItem>
+                    <SelectItem value="Sarah Johnson">Sarah Johnson</SelectItem>
+                    <SelectItem value="Michael Brown">Michael Brown</SelectItem>
+                    <SelectItem value="Emily Davis">Emily Davis</SelectItem>
+                    <SelectItem value="David Wilson">David Wilson</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="unitPrice" className="text-right">
+                Unit Price
+              </Label>
+              <Input
+                id="unitPrice"
+                type="number"
+                value={newSale.unitPrice}
+                onChange={(e) => setNewSale({...newSale, unitPrice: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="currentPrice" className="text-right">
+                Current Price
+              </Label>
+              <Input
+                id="currentPrice"
+                type="number"
+                value={newSale.currentPrice}
+                onChange={(e) => setNewSale({...newSale, currentPrice: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="amount" className="text-right">
                 Amount
@@ -271,6 +323,7 @@ const Sales: React.FC = () => {
                 className="col-span-3"
               />
             </div>
+
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="date" className="text-right">
                 Date

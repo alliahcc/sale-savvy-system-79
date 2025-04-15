@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -72,10 +71,9 @@ const Employees: React.FC = () => {
   const [isAddEmployeeDialogOpen, setIsAddEmployeeDialogOpen] = useState(false);
   const [newEmployee, setNewEmployee] = useState({
     name: "",
-    email: "",
+    empId: "EMP" + Math.floor(1000 + Math.random() * 9000),
     position: "",
     department: "Sales",
-    empId: "EMP" + Math.floor(1000 + Math.random() * 9000),
     hireDate: new Date().toISOString().split('T')[0]
   });
   
@@ -87,10 +85,9 @@ const Employees: React.FC = () => {
     setIsAddEmployeeDialogOpen(false);
     setNewEmployee({
       name: "",
-      email: "",
+      empId: "EMP" + Math.floor(1000 + Math.random() * 9000),
       position: "",
       department: "Sales",
-      empId: "EMP" + Math.floor(1000 + Math.random() * 9000),
       hireDate: new Date().toISOString().split('T')[0]
     });
   };
@@ -140,7 +137,6 @@ const Employees: React.FC = () => {
                     </Avatar>
                     <div>
                       <div className="font-medium">{employee.name}</div>
-                      <div className="text-sm text-muted-foreground">{employee.email}</div>
                     </div>
                   </TableCell>
                   <TableCell>{employee.empId}</TableCell>
@@ -185,18 +181,6 @@ const Employees: React.FC = () => {
                 id="name"
                 value={newEmployee.name}
                 onChange={(e) => setNewEmployee({...newEmployee, name: e.target.value})}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={newEmployee.email}
-                onChange={(e) => setNewEmployee({...newEmployee, email: e.target.value})}
                 className="col-span-3"
               />
             </div>
