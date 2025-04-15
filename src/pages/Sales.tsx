@@ -20,7 +20,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// Updated sales data structure with formatted sale numbers
 const mockSales = [
   {
     id: "1",
@@ -106,7 +105,22 @@ const Sales: React.FC = () => {
 
   const [sales, setSales] = useState(mockSales);
 
-  // Fetch data on component mount
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+
+  const filteredCustomers = customers.filter(customer => 
+    customer.custname?.toLowerCase().includes(customerSearch.toLowerCase())
+  );
+  
+  const filteredEmployees = employees.filter(employee => 
+    `${employee.firstname} ${employee.lastname}`.toLowerCase().includes(employeeSearch.toLowerCase())
+  );
+  
+  const filteredProducts = products.filter(product => 
+    product.description?.toLowerCase().includes(productSearch.toLowerCase())
+  );
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -132,7 +146,6 @@ const Sales: React.FC = () => {
 
   const handleProductSelect = async (productCode: string) => {
     try {
-      // Get the latest price for the selected product
       const { data: priceData } = await supabase
         .from('pricehist')
         .select('unitprice')
@@ -246,32 +259,29 @@ const Sales: React.FC = () => {
                 Customer
               </Label>
               <div className="col-span-3">
-                <Popover open={openCustomer} onOpenChange={setOpenCustomer}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      {newSale.customer || "Select customer..."}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-0" side="bottom" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search customers..." />
-                      <CommandEmpty>No customer found.</CommandEmpty>
-                      <CommandGroup>
-                        {customers.map((customer) => (
-                          <CommandItem
-                            key={customer.custno}
-                            onSelect={() => {
-                              setNewSale({...newSale, customer: customer.custname});
-                              setOpenCustomer(false);
-                            }}
-                          >
-                            {customer.custname}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                <Command className="rounded-lg border shadow-md">
+                  <CommandInput 
+                    placeholder="Search customers..." 
+                    value={customerSearch}
+                    onValueChange={setCustomerSearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty>No customer found.</CommandEmpty>
+                    <CommandGroup>
+                      {filteredCustomers.map((customer) => (
+                        <CommandItem
+                          key={customer.custno}
+                          onSelect={() => {
+                            setNewSale({...newSale, customer: customer.custname || ''});
+                            setCustomerSearch("");
+                          }}
+                        >
+                          {customer.custname}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
               </div>
             </div>
 
@@ -280,32 +290,29 @@ const Sales: React.FC = () => {
                 Employee
               </Label>
               <div className="col-span-3">
-                <Popover open={openEmployee} onOpenChange={setOpenEmployee}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      {newSale.employee || "Select employee..."}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-0" side="bottom" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search employees..." />
-                      <CommandEmpty>No employee found.</CommandEmpty>
-                      <CommandGroup>
-                        {employees.map((employee) => (
-                          <CommandItem
-                            key={employee.empno}
-                            onSelect={() => {
-                              setNewSale({...newSale, employee: `${employee.firstname} ${employee.lastname}`});
-                              setOpenEmployee(false);
-                            }}
-                          >
-                            {`${employee.firstname} ${employee.lastname}`}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                <Command className="rounded-lg border shadow-md">
+                  <CommandInput 
+                    placeholder="Search employees..." 
+                    value={employeeSearch}
+                    onValueChange={setEmployeeSearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty>No employee found.</CommandEmpty>
+                    <CommandGroup>
+                      {filteredEmployees.map((employee) => (
+                        <CommandItem
+                          key={employee.empno}
+                          onSelect={() => {
+                            setNewSale({...newSale, employee: `${employee.firstname} ${employee.lastname}`});
+                            setEmployeeSearch("");
+                          }}
+                        >
+                          {`${employee.firstname} ${employee.lastname}`}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
               </div>
             </div>
 
@@ -314,33 +321,30 @@ const Sales: React.FC = () => {
                 Product
               </Label>
               <div className="col-span-3">
-                <Popover open={openProduct} onOpenChange={setOpenProduct}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      {selectedProduct?.description || "Select product..."}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-0" side="bottom" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search products..." />
-                      <CommandEmpty>No product found.</CommandEmpty>
-                      <CommandGroup>
-                        {products.map((product) => (
-                          <CommandItem
-                            key={product.prodcode}
-                            onSelect={() => {
-                              setSelectedProduct(product);
-                              handleProductSelect(product.prodcode);
-                              setOpenProduct(false);
-                            }}
-                          >
-                            {product.description}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                <Command className="rounded-lg border shadow-md">
+                  <CommandInput 
+                    placeholder="Search products..." 
+                    value={productSearch}
+                    onValueChange={setProductSearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty>No product found.</CommandEmpty>
+                    <CommandGroup>
+                      {filteredProducts.map((product) => (
+                        <CommandItem
+                          key={product.prodcode}
+                          onSelect={() => {
+                            setSelectedProduct(product);
+                            handleProductSelect(product.prodcode);
+                            setProductSearch("");
+                          }}
+                        >
+                          {product.description}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
               </div>
             </div>
 
