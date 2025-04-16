@@ -181,16 +181,38 @@ const Sales: React.FC = () => {
             employee:empno (firstname, lastname),
             salesdetail (
               quantity,
-              product:prodcode (description)
+              product:prodcode (
+                description,
+                prodcode
+              )
             )
           `);
 
         if (salesError) throw salesError;
 
         if (salesDetails) {
+          const productCodes = salesDetails
+            .flatMap(sale => sale.salesdetail?.map(detail => detail.product?.prodcode))
+            .filter(Boolean);
+
+          const { data: priceData } = await supabase
+            .from('pricehist')
+            .select('prodcode, unitprice, effdate')
+            .in('prodcode', productCodes)
+            .order('effdate', { ascending: false });
+
+          const latestPrices = priceData?.reduce((acc: Record<string, number>, curr) => {
+            if (!acc[curr.prodcode]) {
+              acc[curr.prodcode] = curr.unitprice;
+            }
+            return acc;
+          }, {});
+
           const formattedSales: SaleWithDetails[] = salesDetails.map((sale: any) => {
             const product = sale.salesdetail?.[0]?.product?.description || 'N/A';
             const quantity = sale.salesdetail?.[0]?.quantity || 0;
+            const prodCode = sale.salesdetail?.[0]?.product?.prodcode;
+            const unitPrice = latestPrices?.[prodCode] || 0;
             
             return {
               id: sale.transno,
@@ -200,9 +222,9 @@ const Sales: React.FC = () => {
               employee: `${sale.employee?.firstname || ''} ${sale.employee?.lastname || ''}`.trim() || 'N/A',
               product,
               quantity,
-              unitPrice: sale.salesdetail?.[0]?.unitprice || 0,
-              currentPrice: sale.salesdetail?.[0]?.unitprice || 0,
-              amount: (sale.salesdetail?.[0]?.quantity || 0) * (sale.salesdetail?.[0]?.unitprice || 0)
+              unitPrice,
+              currentPrice: unitPrice,
+              amount: quantity * unitPrice
             };
           });
 
