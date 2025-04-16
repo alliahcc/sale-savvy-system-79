@@ -27,6 +27,8 @@ const mockSales = [
     date: "2023-04-15",
     customer: "Acme Corporation",
     employee: "John Smith",
+    product: "Product A",
+    quantity: 2,
     unitPrice: 125.00,
     currentPrice: 150.00,
     amount: 2592.00,
@@ -37,9 +39,11 @@ const mockSales = [
     date: "2023-04-16",
     customer: "Globex Inc.",
     employee: "Sarah Johnson",
+    product: "Product B",
+    quantity: 3,
     unitPrice: 85.25,
     currentPrice: 95.50,
-    amount: 1850.50,
+    amount: 2776.50,
   },
   {
     id: "3",
@@ -47,9 +51,11 @@ const mockSales = [
     date: "2023-04-17",
     customer: "Stark Industries",
     employee: "Michael Brown",
+    product: "Product C",
+    quantity: 4,
     unitPrice: 210.50,
     currentPrice: 245.75,
-    amount: 4200.75,
+    amount: 8820.00,
   },
   {
     id: "4",
@@ -57,9 +63,11 @@ const mockSales = [
     date: "2023-04-18",
     customer: "Wayne Enterprises",
     employee: "Emily Davis",
+    product: "Product D",
+    quantity: 5,
     unitPrice: 89.25,
     currentPrice: 102.50,
-    amount: 1750.25,
+    amount: 4462.50,
   },
   {
     id: "5",
@@ -67,9 +75,11 @@ const mockSales = [
     date: "2023-04-19",
     customer: "Umbrella Corp",
     employee: "David Wilson",
+    product: "Product E",
+    quantity: 6,
     unitPrice: 178.50,
     currentPrice: 198.75,
-    amount: 3600.00,
+    amount: 11910.00,
   }
 ];
 
@@ -99,7 +109,8 @@ const Sales: React.FC = () => {
     product: "",
     unitPrice: 0,
     currentPrice: 0,
-    amount: "",
+    quantity: 1,
+    amount: 0,
     date: new Date().toISOString().split('T')[0]
   });
 
@@ -153,17 +164,28 @@ const Sales: React.FC = () => {
         .order('effdate', { ascending: false })
         .limit(1);
 
+      const selectedProduct = products.find(p => p.prodcode === productCode);
+
       if (priceData && priceData.length > 0) {
         setNewSale(prev => ({
           ...prev,
           product: productCode,
           unitPrice: priceData[0].unitprice,
-          currentPrice: priceData[0].unitprice
+          currentPrice: priceData[0].unitprice,
+          amount: priceData[0].unitprice * prev.quantity
         }));
       }
     } catch (error) {
       console.error('Error fetching product price:', error);
     }
+  };
+
+  const handleQuantityChange = (quantity: number) => {
+    setNewSale(prev => ({
+      ...prev,
+      quantity,
+      amount: prev.currentPrice * quantity
+    }));
   };
   
   const handleViewSale = (id: string) => {
@@ -182,7 +204,8 @@ const Sales: React.FC = () => {
       product: "",
       unitPrice: 0,
       currentPrice: 0,
-      amount: "",
+      quantity: 1,
+      amount: 0,
       date: new Date().toISOString().split('T')[0]
     });
   };
@@ -217,6 +240,8 @@ const Sales: React.FC = () => {
                 <TableHead>Date</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Employee</TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead>Quantity</TableHead>
                 <TableHead>Unit Price</TableHead>
                 <TableHead>Current Price</TableHead>
                 <TableHead>Amount</TableHead>
@@ -230,6 +255,8 @@ const Sales: React.FC = () => {
                   <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
                   <TableCell>{sale.customer}</TableCell>
                   <TableCell>{sale.employee}</TableCell>
+                  <TableCell>{sale.product}</TableCell>
+                  <TableCell>{sale.quantity}</TableCell>
                   <TableCell>{formatCurrency(sale.unitPrice)}</TableCell>
                   <TableCell>{formatCurrency(sale.currentPrice)}</TableCell>
                   <TableCell>{formatCurrency(sale.amount)}</TableCell>
@@ -293,7 +320,7 @@ const Sales: React.FC = () => {
               </Label>
               <div className="col-span-3">
                 <Input 
-                  placeholder="Search employees..." 
+                  placeholder={newSale.employee || "Search employees..."}
                   value={employeeSearch}
                   onChange={(e) => setEmployeeSearch(e.target.value)}
                 />
@@ -326,7 +353,7 @@ const Sales: React.FC = () => {
               </Label>
               <div className="col-span-3">
                 <Input 
-                  placeholder="Search products..." 
+                  placeholder={newSale.product || "Search products..."}
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
                 />
@@ -339,7 +366,6 @@ const Sales: React.FC = () => {
                           <CommandItem
                             key={product.prodcode}
                             onSelect={() => {
-                              setSelectedProduct(product);
                               handleProductSelect(product.prodcode);
                               setProductSearch("");
                             }}
@@ -379,15 +405,28 @@ const Sales: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="quantity" className="text-right">
+                Quantity
+              </Label>
+              <Input
+                id="quantity"
+                type="number"
+                min="1"
+                value={newSale.quantity}
+                onChange={(e) => handleQuantityChange(Number(e.target.value))}
+                className="col-span-3"
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="amount" className="text-right">
                 Amount
               </Label>
               <Input
                 id="amount"
-                type="number"
-                value={newSale.amount}
-                onChange={(e) => setNewSale({...newSale, amount: e.target.value})}
+                value={formatCurrency(newSale.amount)}
                 className="col-span-3"
+                disabled
               />
             </div>
 
