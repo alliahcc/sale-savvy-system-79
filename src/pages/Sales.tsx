@@ -20,6 +20,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
+interface SaleWithDetails {
+  id: string;
+  saleNumber: string;
+  date: string;
+  customer: string;
+  employee: string;
+  product: string;
+  quantity: number;
+  unitPrice: number;
+  currentPrice: number;
+  amount: number;
+}
+
 const mockSales = [
   {
     id: "1",
@@ -114,7 +127,7 @@ const Sales: React.FC = () => {
     date: new Date().toISOString().split('T')[0]
   });
 
-  const [sales, setSales] = useState(mockSales);
+  const [salesData, setSalesData] = useState<SaleWithDetails[]>([]);
 
   const [customerSearch, setCustomerSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
@@ -153,6 +166,56 @@ const Sales: React.FC = () => {
     };
 
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const fetchSalesData = async () => {
+      try {
+        setLoading(true);
+        const { data: salesDetails, error: salesError } = await supabase
+          .from('sales')
+          .select(`
+            transno,
+            salesdate,
+            customer:custno (custname),
+            employee:empno (firstname, lastname),
+            salesdetail (
+              quantity,
+              product:prodcode (description)
+            )
+          `);
+
+        if (salesError) throw salesError;
+
+        if (salesDetails) {
+          const formattedSales: SaleWithDetails[] = salesDetails.map((sale: any) => {
+            const product = sale.salesdetail?.[0]?.product?.description || 'N/A';
+            const quantity = sale.salesdetail?.[0]?.quantity || 0;
+            
+            return {
+              id: sale.transno,
+              saleNumber: `SALE ${sale.transno}`,
+              date: sale.salesdate,
+              customer: sale.customer?.custname || 'N/A',
+              employee: `${sale.employee?.firstname || ''} ${sale.employee?.lastname || ''}`.trim() || 'N/A',
+              product,
+              quantity,
+              unitPrice: sale.salesdetail?.[0]?.unitprice || 0,
+              currentPrice: sale.salesdetail?.[0]?.unitprice || 0,
+              amount: (sale.salesdetail?.[0]?.quantity || 0) * (sale.salesdetail?.[0]?.unitprice || 0)
+            };
+          });
+
+          setSalesData(formattedSales);
+        }
+      } catch (error) {
+        console.error('Error fetching sales data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSalesData();
   }, []);
 
   const handleProductSelect = async (productCode: string) => {
@@ -249,7 +312,13 @@ const Sales: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sales.map((sale) => (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                  </TableCell>
+                </TableRow>
+              ) : salesData.map((sale) => (
                 <TableRow key={sale.id}>
                   <TableCell>{sale.saleNumber}</TableCell>
                   <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
