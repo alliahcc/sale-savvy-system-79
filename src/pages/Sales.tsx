@@ -195,16 +195,29 @@ const Sales: React.FC = () => {
             .flatMap(sale => sale.salesdetail?.map(detail => detail.product?.prodcode))
             .filter(Boolean);
 
-          const { data: priceData } = await supabase
+          const { data: allPriceData } = await supabase
+            .from('pricehist')
+            .select('prodcode, unitprice, effdate')
+            .in('prodcode', productCodes);
+
+          const { data: currentPriceData } = await supabase
             .from('pricehist')
             .select('prodcode, unitprice, effdate')
             .in('prodcode', productCodes)
             .order('effdate', { ascending: false });
 
-          const latestPrices = priceData?.reduce((acc: Record<string, number>, curr) => {
+          const latestPrices = currentPriceData?.reduce((acc: Record<string, number>, curr) => {
             if (!acc[curr.prodcode]) {
               acc[curr.prodcode] = curr.unitprice;
             }
+            return acc;
+          }, {});
+
+          const historicalPrices = allPriceData?.reduce((acc: Record<string, Array<{unitprice: number, effdate: string}>>, curr) => {
+            if (!acc[curr.prodcode]) {
+              acc[curr.prodcode] = [];
+            }
+            acc[curr.prodcode].push({ unitprice: curr.unitprice, effdate: curr.effdate });
             return acc;
           }, {});
 
@@ -212,8 +225,17 @@ const Sales: React.FC = () => {
             const product = sale.salesdetail?.[0]?.product?.description || 'N/A';
             const quantity = sale.salesdetail?.[0]?.quantity || 0;
             const prodCode = sale.salesdetail?.[0]?.product?.prodcode;
-            const unitPrice = latestPrices?.[prodCode] || 0;
+            const saleDate = sale.salesdate;
             
+            let unitPrice = 0;
+            if (historicalPrices?.[prodCode]) {
+              const pricesBeforeSale = historicalPrices[prodCode]
+                .filter(price => new Date(price.effdate) <= new Date(saleDate))
+                .sort((a, b) => new Date(b.effdate).getTime() - new Date(a.effdate).getTime());
+              
+              unitPrice = pricesBeforeSale[0]?.unitprice || 0;
+            }
+
             return {
               id: sale.transno,
               saleNumber: `SALE ${sale.transno}`,
@@ -223,7 +245,7 @@ const Sales: React.FC = () => {
               product,
               quantity,
               unitPrice,
-              currentPrice: unitPrice,
+              currentPrice: latestPrices?.[prodCode] || 0,
               amount: quantity * unitPrice
             };
           });
