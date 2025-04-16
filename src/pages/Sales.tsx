@@ -134,15 +134,15 @@ const Sales: React.FC = () => {
   const [productSearch, setProductSearch] = useState("");
 
   const filteredCustomers = customers.filter(customer => 
-    customer.custname?.toLowerCase().includes(customerSearch.toLowerCase())
+    customer.custname?.toLowerCase().startsWith(customerSearch.toLowerCase())
   );
   
   const filteredEmployees = employees.filter(employee => 
-    `${employee.firstname} ${employee.lastname}`.toLowerCase().includes(employeeSearch.toLowerCase())
+    `${employee.firstname} ${employee.lastname}`.toLowerCase().startsWith(employeeSearch.toLowerCase())
   );
   
   const filteredProducts = products.filter(product => 
-    product.description?.toLowerCase().includes(productSearch.toLowerCase())
+    product.description?.toLowerCase().startsWith(productSearch.toLowerCase())
   );
 
   useEffect(() => {
@@ -494,6 +494,20 @@ const Sales: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="quantity" className="text-right">
+                Quantity
+              </Label>
+              <Input
+                id="quantity"
+                type="number"
+                min="1"
+                value={newSale.quantity}
+                onChange={(e) => handleQuantityChange(Number(e.target.value))}
+                className="col-span-3"
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="unitPrice" className="text-right">
                 Unit Price
               </Label>
@@ -514,20 +528,6 @@ const Sales: React.FC = () => {
                 value={newSale.currentPrice}
                 className="col-span-3"
                 disabled
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="quantity" className="text-right">
-                Quantity
-              </Label>
-              <Input
-                id="quantity"
-                type="number"
-                min="1"
-                value={newSale.quantity}
-                onChange={(e) => handleQuantityChange(Number(e.target.value))}
-                className="col-span-3"
               />
             </div>
 
