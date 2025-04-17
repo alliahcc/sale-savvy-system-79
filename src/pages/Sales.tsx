@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -217,7 +216,6 @@ const Sales: React.FC = () => {
 
   const handleProductSelect = async (productCode: string) => {
     try {
-      // Get the product description
       const selectedProduct = products.find(p => p.prodcode === productCode);
       
       if (!selectedProduct) {
@@ -225,7 +223,6 @@ const Sales: React.FC = () => {
         return;
       }
       
-      // Get all historical prices for this product
       const { data: priceHistoryData, error } = await supabase
         .from('pricehist')
         .select('unitprice, effdate')
@@ -236,27 +233,23 @@ const Sales: React.FC = () => {
         throw error;
       }
       
-      // Get the oldest price (original price)
       const originalPrice = priceHistoryData && priceHistoryData.length > 0 
         ? priceHistoryData[0].unitprice 
         : 0;
       
-      // Get the most recent price (current price)
       const currentPrice = priceHistoryData && priceHistoryData.length > 0 
         ? priceHistoryData[priceHistoryData.length - 1].unitprice 
         : 0;
 
-      // Update the current product item
       setCurrentProductItem({
         productId: productCode,
         product: selectedProduct.description || '',
         quantity: 1,
-        unitPrice: originalPrice, // Original price
-        currentPrice: currentPrice, // Current price
-        amount: currentPrice // Use current price for amount calculation
+        unitPrice: originalPrice,
+        currentPrice: currentPrice,
+        amount: currentPrice
       });
       
-      // Hide the dropdown after selection
       setShowProductDropdown(false);
       setProductSearch(selectedProduct.description || '');
     } catch (error) {
@@ -268,7 +261,7 @@ const Sales: React.FC = () => {
     setCurrentProductItem(prev => ({
       ...prev,
       quantity,
-      amount: prev.currentPrice * quantity // Use current price for calculation
+      amount: prev.currentPrice * quantity
     }));
   };
   
@@ -282,7 +275,6 @@ const Sales: React.FC = () => {
       return;
     }
     
-    // Add the current product to the items array
     setNewSale(prev => {
       const updatedItems = [...prev.items, currentProductItem];
       const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
@@ -294,7 +286,6 @@ const Sales: React.FC = () => {
       };
     });
     
-    // Reset the current product
     setCurrentProductItem({
       productId: "",
       product: "",
@@ -311,7 +302,6 @@ const Sales: React.FC = () => {
     setEditingItemIndex(index);
     const itemToEdit = newSale.items[index];
 
-    // Set the current product item to the one being edited
     setCurrentProductItem({
       ...itemToEdit
     });
@@ -329,12 +319,11 @@ const Sales: React.FC = () => {
       return;
     }
 
-    // Update the item in the items array
     setNewSale(prev => {
       const updatedItems = [...prev.items];
       updatedItems[index] = {
         ...currentProductItem,
-        amount: currentProductItem.currentPrice * currentProductItem.quantity // Use current price
+        amount: currentProductItem.currentPrice * currentProductItem.quantity
       };
       
       const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
@@ -346,7 +335,6 @@ const Sales: React.FC = () => {
       };
     });
     
-    // Reset editing state
     setEditingItemIndex(null);
     setCurrentProductItem({
       productId: "",
@@ -423,7 +411,6 @@ const Sales: React.FC = () => {
   };
   
   const handleNewSaleSubmit = async () => {
-    // Validation
     if (!newSale.customerId) {
       toast({
         title: "Error",
@@ -454,28 +441,35 @@ const Sales: React.FC = () => {
     try {
       setSavingOrder(true);
       
-      // Generate a unique transaction number using current timestamp + random string
-      const timestamp = Date.now();
-      const randomStr = Math.random().toString(36).substring(2, 8);
-      const transNo = `TRN${timestamp}${randomStr}`.substring(0, 20);
+      const timestamp = Date.now() % 10000;
+      const randomChars = Math.random().toString(36).substring(2, 6);
+      const transNo = `T${timestamp}${randomChars}`.substring(0, 8);
       
-      // Insert the sale record
-      const { error: salesError } = await supabase
+      console.log("Creating sale with transaction number:", transNo);
+      console.log("Customer ID:", newSale.customerId);
+      console.log("Employee ID:", newSale.employeeId);
+      console.log("Sale date:", newSale.date);
+      
+      const { data: salesData, error: salesError } = await supabase
         .from('sales')
         .insert({
           transno: transNo,
           custno: newSale.customerId,
           empno: newSale.employeeId,
           salesdate: newSale.date
-        });
+        })
+        .select();
         
       if (salesError) {
         console.error('Error creating sale record:', salesError);
-        throw salesError;
+        throw new Error(`Error creating sale: ${salesError.message}`);
       }
       
-      // Insert the sale details for each item
+      console.log("Sale created successfully:", salesData);
+      
       for (const item of newSale.items) {
+        console.log("Adding product:", item.productId, "quantity:", item.quantity);
+        
         const { error: detailError } = await supabase
           .from('salesdetail')
           .insert({
@@ -486,66 +480,40 @@ const Sales: React.FC = () => {
           
         if (detailError) {
           console.error('Error creating sale detail:', detailError);
-          throw detailError;
+          throw new Error(`Error adding product: ${detailError.message}`);
         }
       }
+      
+      console.log("All sale details added successfully");
       
       toast({
         title: "Sale created",
         description: `New sale created for ${newSale.customer}`,
       });
 
-      // Refresh the sales data
-      const { data: newSaleData, error: fetchError } = await supabase
-        .from('sales')
-        .select(`
-          transno,
-          salesdate,
-          customer:custno (custname),
-          employee:empno (firstname, lastname),
-          salesdetail (
-            quantity,
-            product:prodcode (
-              description,
-              prodcode
-            )
-          )
-        `)
-        .eq('transno', transNo)
-        .single();
-        
-      if (fetchError) {
-        console.error('Error fetching new sale data:', fetchError);
-      }
-        
-      if (newSaleData) {
-        // Create new sale details to add to the table
-        const newSaleItems: SaleWithDetails[] = newSale.items.map((item, index) => {
-          return {
-            id: index === 0 ? transNo : `${transNo}-${index}`,
-            saleNumber: index === 0 ? `SALE ${transNo}` : `SALE ${transNo} (item ${index + 1})`,
-            date: newSale.date,
-            customer: newSale.customer,
-            employee: newSale.employee,
-            product: item.product,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            currentPrice: item.currentPrice,
-            amount: item.amount
-          };
-        });
-        
-        // Add the new sale to the sales data
-        setSalesData(prev => [...newSaleItems, ...prev]);
-      }
+      const newSaleItems: SaleWithDetails[] = newSale.items.map((item, index) => {
+        return {
+          id: index === 0 ? transNo : `${transNo}-${index}`,
+          saleNumber: index === 0 ? `SALE ${transNo}` : `SALE ${transNo} (item ${index + 1})`,
+          date: newSale.date,
+          customer: newSale.customer,
+          employee: newSale.employee,
+          product: item.product,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          currentPrice: item.currentPrice,
+          amount: item.amount
+        };
+      });
       
-      // Close the dialog and reset the form
+      setSalesData(prev => [...newSaleItems, ...prev]);
+      
       handleNewSaleClose();
     } catch (error) {
       console.error('Error creating sale:', error);
       toast({
         title: "Error",
-        description: "Failed to create sale. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create sale. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -799,7 +767,7 @@ const Sales: React.FC = () => {
                       <TableHead>Unit Price</TableHead>
                       <TableHead>Current Price</TableHead>
                       <TableHead>Amount</TableHead>
-                      <TableHead className="w-20"></TableHead> {/* Removed "Actions" header */}
+                      <TableHead className="w-20"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -811,7 +779,7 @@ const Sales: React.FC = () => {
                         <TableCell>{formatCurrency(item.currentPrice)}</TableCell>
                         <TableCell>{formatCurrency(item.amount)}</TableCell>
                         <TableCell>
-                          <div className="flex gap-1"> {/* Reduced gap from gap-2 to gap-1 */}
+                          <div className="flex gap-1">
                             <Button 
                               variant="ghost" 
                               size="sm" 
