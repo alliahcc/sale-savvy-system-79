@@ -14,12 +14,10 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
-import { PlusIcon, Loader2 } from 'lucide-react';
+import { PlusIcon, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface SaleWithDetails {
   id: string;
@@ -34,68 +32,14 @@ interface SaleWithDetails {
   amount: number;
 }
 
-const mockSales = [
-  {
-    id: "1",
-    saleNumber: "SALE 001",
-    date: "2023-04-15",
-    customer: "Acme Corporation",
-    employee: "John Smith",
-    product: "Product A",
-    quantity: 2,
-    unitPrice: 125.00,
-    currentPrice: 150.00,
-    amount: 2592.00,
-  },
-  {
-    id: "2",
-    saleNumber: "SALE 002",
-    date: "2023-04-16",
-    customer: "Globex Inc.",
-    employee: "Sarah Johnson",
-    product: "Product B",
-    quantity: 3,
-    unitPrice: 85.25,
-    currentPrice: 95.50,
-    amount: 2776.50,
-  },
-  {
-    id: "3",
-    saleNumber: "SALE 003",
-    date: "2023-04-17",
-    customer: "Stark Industries",
-    employee: "Michael Brown",
-    product: "Product C",
-    quantity: 4,
-    unitPrice: 210.50,
-    currentPrice: 245.75,
-    amount: 8820.00,
-  },
-  {
-    id: "4",
-    saleNumber: "SALE 004",
-    date: "2023-04-18",
-    customer: "Wayne Enterprises",
-    employee: "Emily Davis",
-    product: "Product D",
-    quantity: 5,
-    unitPrice: 89.25,
-    currentPrice: 102.50,
-    amount: 4462.50,
-  },
-  {
-    id: "5",
-    saleNumber: "SALE 005",
-    date: "2023-04-19",
-    customer: "Umbrella Corp",
-    employee: "David Wilson",
-    product: "Product E",
-    quantity: 6,
-    unitPrice: 178.50,
-    currentPrice: 198.75,
-    amount: 11910.00,
-  }
-];
+interface SaleItem {
+  productId: string;
+  product: string;
+  quantity: number;
+  unitPrice: number;
+  currentPrice: number;
+  amount: number;
+}
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-US', {
@@ -112,30 +56,29 @@ const Sales: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [openCustomer, setOpenCustomer] = useState(false);
-  const [openEmployee, setOpenEmployee] = useState(false);
-  const [openProduct, setOpenProduct] = useState(false);
-  
-  const [newSale, setNewSale] = useState({
-    customer: "",
-    customerId: "", // Store customer ID for submission
-    employee: "",
-    employeeId: "", // Store employee ID for submission
-    product: "",
-    productId: "", // Store product ID for submission
-    unitPrice: 0,
-    currentPrice: 0,
-    quantity: 1,
-    amount: 0,
-    date: new Date().toISOString().split('T')[0]
-  });
-
-  const [salesData, setSalesData] = useState<SaleWithDetails[]>([]);
-
   const [customerSearch, setCustomerSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
+  const [currentProductItem, setCurrentProductItem] = useState<SaleItem>({
+    productId: "",
+    product: "",
+    quantity: 1,
+    unitPrice: 0,
+    currentPrice: 0,
+    amount: 0
+  });
+  
+  const [newSale, setNewSale] = useState({
+    customer: "",
+    customerId: "",
+    employee: "",
+    employeeId: "",
+    date: new Date().toISOString().split('T')[0],
+    items: [] as SaleItem[],
+    totalAmount: 0
+  });
+
+  const [salesData, setSalesData] = useState<SaleWithDetails[]>([]);
 
   const filteredCustomers = customers.filter(customer => 
     customer.custname?.toLowerCase().startsWith(customerSearch.toLowerCase())
@@ -288,26 +231,74 @@ const Sales: React.FC = () => {
         ? currentPriceData[0].unitprice 
         : 0;
 
-      // Update the new sale with the product details
-      setNewSale(prev => ({
-        ...prev,
-        product: selectedProduct.description,
+      // Update the current product item
+      setCurrentProductItem({
         productId: productCode,
-        unitPrice: currentPrice, // Initially set unit price to current price
+        product: selectedProduct.description || '',
+        quantity: 1,
+        unitPrice: currentPrice, // Initially same as current price, will be the original price when added
         currentPrice: currentPrice,
-        amount: currentPrice * prev.quantity
-      }));
+        amount: currentPrice
+      });
     } catch (error) {
       console.error('Error fetching product price:', error);
     }
   };
 
   const handleQuantityChange = (quantity: number) => {
-    setNewSale(prev => ({
+    setCurrentProductItem(prev => ({
       ...prev,
       quantity,
-      amount: prev.unitPrice * quantity // Calculate amount based on unit price
+      amount: prev.unitPrice * quantity
     }));
+  };
+  
+  const handleAddProductToSale = () => {
+    if (!currentProductItem.productId) {
+      toast({
+        title: "Error",
+        description: "Please select a product first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Add the current product to the items array
+    setNewSale(prev => {
+      const updatedItems = [...prev.items, currentProductItem];
+      const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
+      
+      return {
+        ...prev,
+        items: updatedItems,
+        totalAmount
+      };
+    });
+    
+    // Reset the current product
+    setCurrentProductItem({
+      productId: "",
+      product: "",
+      quantity: 1,
+      unitPrice: 0,
+      currentPrice: 0,
+      amount: 0
+    });
+    
+    setProductSearch("");
+  };
+  
+  const handleRemoveItem = (index: number) => {
+    setNewSale(prev => {
+      const updatedItems = prev.items.filter((_, i) => i !== index);
+      const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
+      
+      return {
+        ...prev,
+        items: updatedItems,
+        totalAmount
+      };
+    });
   };
   
   const handleViewSale = (id: string) => {
@@ -325,18 +316,51 @@ const Sales: React.FC = () => {
       customerId: "",
       employee: "",
       employeeId: "",
-      product: "",
+      date: new Date().toISOString().split('T')[0],
+      items: [],
+      totalAmount: 0
+    });
+    setCurrentProductItem({
       productId: "",
+      product: "",
+      quantity: 1,
       unitPrice: 0,
       currentPrice: 0,
-      quantity: 1,
-      amount: 0,
-      date: new Date().toISOString().split('T')[0]
+      amount: 0
     });
+    setCustomerSearch("");
+    setEmployeeSearch("");
+    setProductSearch("");
   };
   
   const handleNewSaleSubmit = async () => {
-    // Validation would go here
+    // Validation
+    if (!newSale.customerId) {
+      toast({
+        title: "Error",
+        description: "Please select a customer",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!newSale.employeeId) {
+      toast({
+        title: "Error",
+        description: "Please select an employee",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (newSale.items.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one product",
+        variant: "destructive"
+      });
+      return;
+    }
     
     toast({
       title: "Sale created",
@@ -414,93 +438,100 @@ const Sales: React.FC = () => {
               Enter the details for the new sale.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="customer" className="text-right">
-                Customer
-              </Label>
-              <div className="col-span-3">
-                <Input 
-                  placeholder={newSale.customer || "Search customers..."}
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                />
-                {customerSearch && (
-                  <Command className="rounded-lg border shadow-md mt-2">
-                    <CommandList>
-                      <CommandEmpty>No customer found.</CommandEmpty>
-                      <CommandGroup>
-                        {filteredCustomers.map((customer) => (
-                          <CommandItem
-                            key={customer.custno}
-                            onSelect={() => {
-                              setNewSale({
-                                ...newSale, 
-                                customer: customer.custname || '',
-                                customerId: customer.custno
-                              });
-                              setCustomerSearch('');
-                            }}
-                          >
-                            {customer.custname}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                )}
-              </div>
+          
+          <div className="flex justify-between items-center">
+            <div></div> {/* Empty div for spacing */}
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="date">Date:</Label>
+              <Input
+                id="date"
+                type="date"
+                value={newSale.date}
+                onChange={(e) => setNewSale({...newSale, date: e.target.value})}
+                className="w-40"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="customer">Customer</Label>
+              <Input 
+                placeholder={newSale.customer || "Search customers..."}
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+              />
+              {customerSearch && (
+                <Command className="rounded-lg border shadow-md mt-2 absolute z-10 bg-white w-[calc(50%-1rem)]">
+                  <CommandList>
+                    <CommandEmpty>No customer found.</CommandEmpty>
+                    <CommandGroup>
+                      {filteredCustomers.map((customer) => (
+                        <CommandItem
+                          key={customer.custno}
+                          onSelect={() => {
+                            setNewSale({
+                              ...newSale, 
+                              customer: customer.custname || '',
+                              customerId: customer.custno
+                            });
+                            setCustomerSearch('');
+                          }}
+                        >
+                          {customer.custname}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              )}
             </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="employee" className="text-right">
-                Employee
-              </Label>
-              <div className="col-span-3">
-                <Input 
-                  placeholder={newSale.employee || "Search employees..."}
-                  value={employeeSearch}
-                  onChange={(e) => setEmployeeSearch(e.target.value)}
-                />
-                {employeeSearch && (
-                  <Command className="rounded-lg border shadow-md mt-2">
-                    <CommandList>
-                      <CommandEmpty>No employee found.</CommandEmpty>
-                      <CommandGroup>
-                        {filteredEmployees.map((employee) => (
-                          <CommandItem
-                            key={employee.empno}
-                            onSelect={() => {
-                              setNewSale({
-                                ...newSale, 
-                                employee: `${employee.firstname} ${employee.lastname}`,
-                                employeeId: employee.empno
-                              });
-                              setEmployeeSearch("");
-                            }}
-                          >
-                            {`${employee.firstname} ${employee.lastname}`}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                )}
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="employee">Employee</Label>
+              <Input 
+                placeholder={newSale.employee || "Search employees..."}
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+              />
+              {employeeSearch && (
+                <Command className="rounded-lg border shadow-md mt-2 absolute z-10 bg-white w-[calc(50%-1rem)]">
+                  <CommandList>
+                    <CommandEmpty>No employee found.</CommandEmpty>
+                    <CommandGroup>
+                      {filteredEmployees.map((employee) => (
+                        <CommandItem
+                          key={employee.empno}
+                          onSelect={() => {
+                            setNewSale({
+                              ...newSale, 
+                              employee: `${employee.firstname} ${employee.lastname}`,
+                              employeeId: employee.empno
+                            });
+                            setEmployeeSearch("");
+                          }}
+                        >
+                          {`${employee.firstname} ${employee.lastname}`}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              )}
             </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="product" className="text-right">
-                Product
-              </Label>
-              <div className="col-span-3">
+          </div>
+          
+          <div className="flex flex-col space-y-4">
+            <div className="flex items-end gap-3">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="product">Product</Label>
                 <Input 
-                  placeholder={newSale.product || "Search products..."}
+                  placeholder={currentProductItem.product || "Search products..."}
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
                 />
                 {productSearch && (
-                  <Command className="rounded-lg border shadow-md mt-2">
+                  <Command className="rounded-lg border shadow-md mt-2 absolute z-10 bg-white w-[calc(50%-1rem)]">
                     <CommandList>
                       <CommandEmpty>No product found.</CommandEmpty>
                       <CommandGroup>
@@ -520,71 +551,86 @@ const Sales: React.FC = () => {
                   </Command>
                 )}
               </div>
+              
+              <div className="w-24 space-y-2">
+                <Label htmlFor="quantity">Quantity</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  value={currentProductItem.quantity}
+                  onChange={(e) => handleQuantityChange(Number(e.target.value))}
+                />
+              </div>
+              
+              <div className="w-32 space-y-2">
+                <Label htmlFor="unitPrice">Unit Price</Label>
+                <Input
+                  id="unitPrice"
+                  value={formatCurrency(currentProductItem.unitPrice)}
+                  disabled
+                />
+              </div>
+              
+              <div className="w-32 space-y-2">
+                <Label htmlFor="currentPrice">Current Price</Label>
+                <Input
+                  id="currentPrice"
+                  value={formatCurrency(currentProductItem.currentPrice)}
+                  disabled
+                />
+              </div>
+              
+              <Button onClick={handleAddProductToSale} disabled={!currentProductItem.productId}>
+                <PlusIcon className="h-4 w-4" />
+              </Button>
             </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="quantity" className="text-right">
-                Quantity
-              </Label>
-              <Input
-                id="quantity"
-                type="number"
-                min="1"
-                value={newSale.quantity}
-                onChange={(e) => handleQuantityChange(Number(e.target.value))}
-                className="col-span-3"
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="unitPrice" className="text-right">
-                Unit Price
-              </Label>
-              <Input
-                id="unitPrice"
-                value={formatCurrency(newSale.unitPrice)}
-                className="col-span-3"
-                disabled
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="currentPrice" className="text-right">
-                Current Price
-              </Label>
-              <Input
-                id="currentPrice"
-                value={formatCurrency(newSale.currentPrice)}
-                className="col-span-3"
-                disabled
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right">
-                Amount
-              </Label>
-              <Input
-                id="amount"
-                value={formatCurrency(newSale.amount)}
-                className="col-span-3"
-                disabled
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="date" className="text-right">
-                Date
-              </Label>
-              <Input
-                id="date"
-                type="date"
-                value={newSale.date}
-                onChange={(e) => setNewSale({...newSale, date: e.target.value})}
-                className="col-span-3"
-              />
+            
+            <div className="border rounded p-2">
+              <div className="font-bold mb-2">Cart Items</div>
+              {newSale.items.length === 0 ? (
+                <div className="text-muted-foreground text-center p-4">No items added yet</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Unit Price</TableHead>
+                      <TableHead>Current Price</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {newSale.items.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{item.product}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
+                        <TableCell>{formatCurrency(item.currentPrice)}</TableCell>
+                        <TableCell>{formatCurrency(item.amount)}</TableCell>
+                        <TableCell>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleRemoveItem(index)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-right font-bold">Total:</TableCell>
+                      <TableCell colSpan={2} className="font-bold">{formatCurrency(newSale.totalAmount)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
             </div>
           </div>
+          
           <DialogFooter>
             <Button variant="outline" onClick={handleNewSaleClose}>Cancel</Button>
             <Button onClick={handleNewSaleSubmit}>Create Sale</Button>
