@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -118,8 +119,11 @@ const Sales: React.FC = () => {
   
   const [newSale, setNewSale] = useState({
     customer: "",
+    customerId: "", // Store customer ID for submission
     employee: "",
+    employeeId: "", // Store employee ID for submission
     product: "",
+    productId: "", // Store product ID for submission
     unitPrice: 0,
     currentPrice: 0,
     quantity: 1,
@@ -264,24 +268,35 @@ const Sales: React.FC = () => {
 
   const handleProductSelect = async (productCode: string) => {
     try {
-      const { data: priceData } = await supabase
+      // Get the product description
+      const selectedProduct = products.find(p => p.prodcode === productCode);
+      
+      if (!selectedProduct) {
+        console.error('Product not found');
+        return;
+      }
+      
+      // Get the current price (most recent price)
+      const { data: currentPriceData } = await supabase
         .from('pricehist')
         .select('unitprice')
         .eq('prodcode', productCode)
         .order('effdate', { ascending: false })
         .limit(1);
+      
+      const currentPrice = currentPriceData && currentPriceData.length > 0 
+        ? currentPriceData[0].unitprice 
+        : 0;
 
-      const selectedProduct = products.find(p => p.prodcode === productCode);
-
-      if (priceData && priceData.length > 0) {
-        setNewSale(prev => ({
-          ...prev,
-          product: productCode,
-          unitPrice: priceData[0].unitprice,
-          currentPrice: priceData[0].unitprice,
-          amount: priceData[0].unitprice * prev.quantity
-        }));
-      }
+      // Update the new sale with the product details
+      setNewSale(prev => ({
+        ...prev,
+        product: selectedProduct.description,
+        productId: productCode,
+        unitPrice: currentPrice, // Initially set unit price to current price
+        currentPrice: currentPrice,
+        amount: currentPrice * prev.quantity
+      }));
     } catch (error) {
       console.error('Error fetching product price:', error);
     }
@@ -291,7 +306,7 @@ const Sales: React.FC = () => {
     setNewSale(prev => ({
       ...prev,
       quantity,
-      amount: prev.currentPrice * quantity
+      amount: prev.unitPrice * quantity // Calculate amount based on unit price
     }));
   };
   
@@ -307,8 +322,11 @@ const Sales: React.FC = () => {
     setIsNewSaleDialogOpen(false);
     setNewSale({
       customer: "",
+      customerId: "",
       employee: "",
+      employeeId: "",
       product: "",
+      productId: "",
       unitPrice: 0,
       currentPrice: 0,
       quantity: 1,
@@ -317,11 +335,14 @@ const Sales: React.FC = () => {
     });
   };
   
-  const handleNewSaleSubmit = () => {
+  const handleNewSaleSubmit = async () => {
+    // Validation would go here
+    
     toast({
       title: "Sale created",
       description: `New sale created for ${newSale.customer}`,
     });
+    
     handleNewSaleClose();
   };
   
@@ -413,7 +434,11 @@ const Sales: React.FC = () => {
                           <CommandItem
                             key={customer.custno}
                             onSelect={() => {
-                              setNewSale({...newSale, customer: customer.custname || ''});
+                              setNewSale({
+                                ...newSale, 
+                                customer: customer.custname || '',
+                                customerId: customer.custno
+                              });
                               setCustomerSearch('');
                             }}
                           >
@@ -446,7 +471,11 @@ const Sales: React.FC = () => {
                           <CommandItem
                             key={employee.empno}
                             onSelect={() => {
-                              setNewSale({...newSale, employee: `${employee.firstname} ${employee.lastname}`});
+                              setNewSale({
+                                ...newSale, 
+                                employee: `${employee.firstname} ${employee.lastname}`,
+                                employeeId: employee.empno
+                              });
                               setEmployeeSearch("");
                             }}
                           >
@@ -513,7 +542,7 @@ const Sales: React.FC = () => {
               </Label>
               <Input
                 id="unitPrice"
-                value={newSale.unitPrice}
+                value={formatCurrency(newSale.unitPrice)}
                 className="col-span-3"
                 disabled
               />
@@ -525,7 +554,7 @@ const Sales: React.FC = () => {
               </Label>
               <Input
                 id="currentPrice"
-                value={newSale.currentPrice}
+                value={formatCurrency(newSale.currentPrice)}
                 className="col-span-3"
                 disabled
               />
