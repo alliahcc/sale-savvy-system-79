@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
-import { PlusIcon, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { PlusIcon, Loader2, Pencil, Trash2, Save } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
@@ -39,6 +39,7 @@ interface SaleItem {
   unitPrice: number;
   currentPrice: number;
   amount: number;
+  isEditing?: boolean;
 }
 
 const formatCurrency = (amount: number) => {
@@ -53,12 +54,14 @@ const Sales: React.FC = () => {
   const { toast } = useToast();
   const [isNewSaleDialogOpen, setIsNewSaleDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [customerSearch, setCustomerSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [currentProductItem, setCurrentProductItem] = useState<SaleItem>({
     productId: "",
     product: "",
@@ -219,16 +222,25 @@ const Sales: React.FC = () => {
         return;
       }
       
-      // Get the current price (most recent price)
-      const { data: currentPriceData } = await supabase
+      // Get all historical prices for this product
+      const { data: priceHistoryData, error } = await supabase
         .from('pricehist')
-        .select('unitprice')
+        .select('unitprice, effdate')
         .eq('prodcode', productCode)
-        .order('effdate', { ascending: false })
-        .limit(1);
+        .order('effdate', { ascending: true });
       
-      const currentPrice = currentPriceData && currentPriceData.length > 0 
-        ? currentPriceData[0].unitprice 
+      if (error) {
+        throw error;
+      }
+      
+      // Get the oldest price (original price)
+      const originalPrice = priceHistoryData && priceHistoryData.length > 0 
+        ? priceHistoryData[0].unitprice 
+        : 0;
+      
+      // Get the most recent price (current price)
+      const currentPrice = priceHistoryData && priceHistoryData.length > 0 
+        ? priceHistoryData[priceHistoryData.length - 1].unitprice 
         : 0;
 
       // Update the current product item
@@ -236,9 +248,9 @@ const Sales: React.FC = () => {
         productId: productCode,
         product: selectedProduct.description || '',
         quantity: 1,
-        unitPrice: currentPrice, // Initially same as current price, will be the original price when added
-        currentPrice: currentPrice,
-        amount: currentPrice
+        unitPrice: originalPrice, // Original price
+        currentPrice: currentPrice, // Current price
+        amount: originalPrice // Use original price for amount calculation
       });
     } catch (error) {
       console.error('Error fetching product price:', error);
@@ -287,8 +299,74 @@ const Sales: React.FC = () => {
     
     setProductSearch("");
   };
+
+  const handleEditItem = (index: number) => {
+    setEditingItemIndex(index);
+    const itemToEdit = newSale.items[index];
+
+    // Set the current product item to the one being edited
+    setCurrentProductItem({
+      ...itemToEdit
+    });
+
+    setProductSearch(itemToEdit.product);
+  };
+
+  const handleSaveEdit = (index: number) => {
+    if (!currentProductItem.productId) {
+      toast({
+        title: "Error",
+        description: "Please select a product",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Update the item in the items array
+    setNewSale(prev => {
+      const updatedItems = [...prev.items];
+      updatedItems[index] = {
+        ...currentProductItem,
+        amount: currentProductItem.unitPrice * currentProductItem.quantity
+      };
+      
+      const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
+      
+      return {
+        ...prev,
+        items: updatedItems,
+        totalAmount
+      };
+    });
+    
+    // Reset editing state
+    setEditingItemIndex(null);
+    setCurrentProductItem({
+      productId: "",
+      product: "",
+      quantity: 1,
+      unitPrice: 0,
+      currentPrice: 0,
+      amount: 0
+    });
+    
+    setProductSearch("");
+  };
   
   const handleRemoveItem = (index: number) => {
+    if (editingItemIndex === index) {
+      setEditingItemIndex(null);
+      setCurrentProductItem({
+        productId: "",
+        product: "",
+        quantity: 1,
+        unitPrice: 0,
+        currentPrice: 0,
+        amount: 0
+      });
+      setProductSearch("");
+    }
+
     setNewSale(prev => {
       const updatedItems = prev.items.filter((_, i) => i !== index);
       const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
@@ -331,6 +409,7 @@ const Sales: React.FC = () => {
     setCustomerSearch("");
     setEmployeeSearch("");
     setProductSearch("");
+    setEditingItemIndex(null);
   };
   
   const handleNewSaleSubmit = async () => {
@@ -361,13 +440,106 @@ const Sales: React.FC = () => {
       });
       return;
     }
-    
-    toast({
-      title: "Sale created",
-      description: `New sale created for ${newSale.customer}`,
-    });
-    
-    handleNewSaleClose();
+
+    try {
+      setSavingOrder(true);
+      
+      // Generate a unique transaction number
+      const transNo = `TRN${Date.now()}`;
+      
+      // Insert the sale record
+      const { error: salesError } = await supabase
+        .from('sales')
+        .insert({
+          transno: transNo,
+          custno: newSale.customerId,
+          empno: newSale.employeeId,
+          salesdate: newSale.date
+        });
+        
+      if (salesError) {
+        throw salesError;
+      }
+      
+      // Insert the sale details for each item
+      const salesDetailPromises = newSale.items.map(item => {
+        return supabase
+          .from('salesdetail')
+          .insert({
+            transno: transNo,
+            prodcode: item.productId,
+            quantity: item.quantity
+          });
+      });
+      
+      await Promise.all(salesDetailPromises);
+      
+      toast({
+        title: "Sale created",
+        description: `New sale created for ${newSale.customer}`,
+      });
+
+      // Refresh the sales data
+      const { data: newSaleData } = await supabase
+        .from('sales')
+        .select(`
+          transno,
+          salesdate,
+          customer:custno (custname),
+          employee:empno (firstname, lastname),
+          salesdetail (
+            quantity,
+            product:prodcode (
+              description,
+              prodcode
+            )
+          )
+        `)
+        .eq('transno', transNo)
+        .single();
+        
+      if (newSaleData) {
+        // Get the product code
+        const prodCode = newSaleData.salesdetail?.[0]?.product?.prodcode;
+        
+        // Get the price history for this product
+        const { data: priceData } = await supabase
+          .from('pricehist')
+          .select('unitprice, effdate')
+          .eq('prodcode', prodCode)
+          .order('effdate', { ascending: true });
+          
+        // Get the original and current prices
+        const originalPrice = priceData && priceData.length > 0 ? priceData[0].unitprice : 0;
+        const currentPrice = priceData && priceData.length > 0 ? priceData[priceData.length - 1].unitprice : 0;
+        
+        const newSaleDetails: SaleWithDetails = {
+          id: newSaleData.transno,
+          saleNumber: `SALE ${newSaleData.transno}`,
+          date: newSaleData.salesdate,
+          customer: newSaleData.customer?.custname || 'N/A',
+          employee: `${newSaleData.employee?.firstname || ''} ${newSaleData.employee?.lastname || ''}`.trim() || 'N/A',
+          product: newSaleData.salesdetail?.[0]?.product?.description || 'N/A',
+          quantity: newSaleData.salesdetail?.[0]?.quantity || 0,
+          unitPrice: originalPrice,
+          currentPrice: currentPrice,
+          amount: (newSaleData.salesdetail?.[0]?.quantity || 0) * originalPrice
+        };
+        
+        setSalesData(prev => [newSaleDetails, ...prev]);
+      }
+      
+      handleNewSaleClose();
+    } catch (error) {
+      console.error('Error creating sale:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create sale. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setSavingOrder(false);
+    }
   };
   
   return (
@@ -540,7 +712,7 @@ const Sales: React.FC = () => {
                             key={product.prodcode}
                             onSelect={() => {
                               handleProductSelect(product.prodcode);
-                              setProductSearch("");
+                              setProductSearch(product.description || "");
                             }}
                           >
                             {product.description}
@@ -581,9 +753,15 @@ const Sales: React.FC = () => {
                 />
               </div>
               
-              <Button onClick={handleAddProductToSale} disabled={!currentProductItem.productId}>
-                <PlusIcon className="h-4 w-4" />
-              </Button>
+              {editingItemIndex !== null ? (
+                <Button onClick={() => handleSaveEdit(editingItemIndex)}>
+                  <Save className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button onClick={handleAddProductToSale} disabled={!currentProductItem.productId}>
+                  <PlusIcon className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             
             <div className="border rounded p-2">
@@ -599,7 +777,7 @@ const Sales: React.FC = () => {
                       <TableHead>Unit Price</TableHead>
                       <TableHead>Current Price</TableHead>
                       <TableHead>Amount</TableHead>
-                      <TableHead></TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -611,13 +789,23 @@ const Sales: React.FC = () => {
                         <TableCell>{formatCurrency(item.currentPrice)}</TableCell>
                         <TableCell>{formatCurrency(item.amount)}</TableCell>
                         <TableCell>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => handleRemoveItem(index)}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleEditItem(index)}
+                              disabled={editingItemIndex !== null}
+                            >
+                              <Pencil className="h-4 w-4 text-blue-500" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleRemoveItem(index)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -632,8 +820,17 @@ const Sales: React.FC = () => {
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={handleNewSaleClose}>Cancel</Button>
-            <Button onClick={handleNewSaleSubmit}>Create Sale</Button>
+            <Button variant="outline" onClick={handleNewSaleClose} disabled={savingOrder}>Cancel</Button>
+            <Button onClick={handleNewSaleSubmit} disabled={savingOrder}>
+              {savingOrder ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Sale'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
