@@ -61,6 +61,9 @@ const Sales: React.FC = () => {
   const [customerSearch, setCustomerSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [currentProductItem, setCurrentProductItem] = useState<SaleItem>({
     productId: "",
@@ -250,8 +253,12 @@ const Sales: React.FC = () => {
         quantity: 1,
         unitPrice: originalPrice, // Original price
         currentPrice: currentPrice, // Current price
-        amount: originalPrice // Use original price for amount calculation
+        amount: currentPrice // Use current price for amount calculation
       });
+      
+      // Hide the dropdown after selection
+      setShowProductDropdown(false);
+      setProductSearch(selectedProduct.description || '');
     } catch (error) {
       console.error('Error fetching product price:', error);
     }
@@ -261,7 +268,7 @@ const Sales: React.FC = () => {
     setCurrentProductItem(prev => ({
       ...prev,
       quantity,
-      amount: prev.unitPrice * quantity
+      amount: prev.currentPrice * quantity // Use current price for calculation
     }));
   };
   
@@ -327,7 +334,7 @@ const Sales: React.FC = () => {
       const updatedItems = [...prev.items];
       updatedItems[index] = {
         ...currentProductItem,
-        amount: currentProductItem.unitPrice * currentProductItem.quantity
+        amount: currentProductItem.currentPrice * currentProductItem.quantity // Use current price
       };
       
       const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
@@ -409,6 +416,9 @@ const Sales: React.FC = () => {
     setCustomerSearch("");
     setEmployeeSearch("");
     setProductSearch("");
+    setShowCustomerDropdown(false);
+    setShowEmployeeDropdown(false);
+    setShowProductDropdown(false);
     setEditingItemIndex(null);
   };
   
@@ -444,8 +454,10 @@ const Sales: React.FC = () => {
     try {
       setSavingOrder(true);
       
-      // Generate a unique transaction number
-      const transNo = `TRN${Date.now()}`;
+      // Generate a unique transaction number using current timestamp + random string
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substring(2, 8);
+      const transNo = `TRN${timestamp}${randomStr}`.substring(0, 20);
       
       // Insert the sale record
       const { error: salesError } = await supabase
@@ -458,21 +470,25 @@ const Sales: React.FC = () => {
         });
         
       if (salesError) {
+        console.error('Error creating sale record:', salesError);
         throw salesError;
       }
       
       // Insert the sale details for each item
-      const salesDetailPromises = newSale.items.map(item => {
-        return supabase
+      for (const item of newSale.items) {
+        const { error: detailError } = await supabase
           .from('salesdetail')
           .insert({
             transno: transNo,
             prodcode: item.productId,
             quantity: item.quantity
           });
-      });
-      
-      await Promise.all(salesDetailPromises);
+          
+        if (detailError) {
+          console.error('Error creating sale detail:', detailError);
+          throw detailError;
+        }
+      }
       
       toast({
         title: "Sale created",
@@ -480,7 +496,7 @@ const Sales: React.FC = () => {
       });
 
       // Refresh the sales data
-      const { data: newSaleData } = await supabase
+      const { data: newSaleData, error: fetchError } = await supabase
         .from('sales')
         .select(`
           transno,
@@ -498,37 +514,32 @@ const Sales: React.FC = () => {
         .eq('transno', transNo)
         .single();
         
+      if (fetchError) {
+        console.error('Error fetching new sale data:', fetchError);
+      }
+        
       if (newSaleData) {
-        // Get the product code
-        const prodCode = newSaleData.salesdetail?.[0]?.product?.prodcode;
+        // Create new sale details to add to the table
+        const newSaleItems: SaleWithDetails[] = newSale.items.map((item, index) => {
+          return {
+            id: index === 0 ? transNo : `${transNo}-${index}`,
+            saleNumber: index === 0 ? `SALE ${transNo}` : `SALE ${transNo} (item ${index + 1})`,
+            date: newSale.date,
+            customer: newSale.customer,
+            employee: newSale.employee,
+            product: item.product,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            currentPrice: item.currentPrice,
+            amount: item.amount
+          };
+        });
         
-        // Get the price history for this product
-        const { data: priceData } = await supabase
-          .from('pricehist')
-          .select('unitprice, effdate')
-          .eq('prodcode', prodCode)
-          .order('effdate', { ascending: true });
-          
-        // Get the original and current prices
-        const originalPrice = priceData && priceData.length > 0 ? priceData[0].unitprice : 0;
-        const currentPrice = priceData && priceData.length > 0 ? priceData[priceData.length - 1].unitprice : 0;
-        
-        const newSaleDetails: SaleWithDetails = {
-          id: newSaleData.transno,
-          saleNumber: `SALE ${newSaleData.transno}`,
-          date: newSaleData.salesdate,
-          customer: newSaleData.customer?.custname || 'N/A',
-          employee: `${newSaleData.employee?.firstname || ''} ${newSaleData.employee?.lastname || ''}`.trim() || 'N/A',
-          product: newSaleData.salesdetail?.[0]?.product?.description || 'N/A',
-          quantity: newSaleData.salesdetail?.[0]?.quantity || 0,
-          unitPrice: originalPrice,
-          currentPrice: currentPrice,
-          amount: (newSaleData.salesdetail?.[0]?.quantity || 0) * originalPrice
-        };
-        
-        setSalesData(prev => [newSaleDetails, ...prev]);
+        // Add the new sale to the sales data
+        setSalesData(prev => [...newSaleItems, ...prev]);
       }
       
+      // Close the dialog and reset the form
       handleNewSaleClose();
     } catch (error) {
       console.error('Error creating sale:', error);
@@ -612,7 +623,7 @@ const Sales: React.FC = () => {
           </DialogHeader>
           
           <div className="flex justify-between items-center">
-            <div></div> {/* Empty div for spacing */}
+            <div></div>
             <div className="flex items-center space-x-2">
               <Label htmlFor="date">Date:</Label>
               <Input
@@ -626,101 +637,112 @@ const Sales: React.FC = () => {
           </div>
           
           <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <Label htmlFor="customer">Customer</Label>
               <Input 
                 placeholder={newSale.customer || "Search customers..."}
                 value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
+                onChange={(e) => {
+                  setCustomerSearch(e.target.value);
+                  setShowCustomerDropdown(true);
+                }}
+                onClick={() => setShowCustomerDropdown(true)}
               />
-              {customerSearch && (
-                <Command className="rounded-lg border shadow-md mt-2 absolute z-10 bg-white w-[calc(50%-1rem)]">
-                  <CommandList>
-                    <CommandEmpty>No customer found.</CommandEmpty>
-                    <CommandGroup>
-                      {filteredCustomers.map((customer) => (
-                        <CommandItem
-                          key={customer.custno}
-                          onSelect={() => {
-                            setNewSale({
-                              ...newSale, 
-                              customer: customer.custname || '',
-                              customerId: customer.custno
-                            });
-                            setCustomerSearch('');
-                          }}
-                        >
-                          {customer.custname}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
+              {showCustomerDropdown && customerSearch && (
+                <div className="absolute z-50 w-full bg-white border rounded-md shadow-md mt-1 max-h-56 overflow-y-auto">
+                  {filteredCustomers.length === 0 ? (
+                    <div className="p-2 text-sm text-gray-500">No customers found</div>
+                  ) : (
+                    filteredCustomers.map((customer) => (
+                      <div 
+                        key={customer.custno} 
+                        className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          setNewSale({
+                            ...newSale, 
+                            customer: customer.custname || '',
+                            customerId: customer.custno
+                          });
+                          setCustomerSearch('');
+                          setShowCustomerDropdown(false);
+                        }}
+                      >
+                        {customer.custname}
+                      </div>
+                    ))
+                  )}
+                </div>
               )}
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <Label htmlFor="employee">Employee</Label>
               <Input 
                 placeholder={newSale.employee || "Search employees..."}
                 value={employeeSearch}
-                onChange={(e) => setEmployeeSearch(e.target.value)}
+                onChange={(e) => {
+                  setEmployeeSearch(e.target.value);
+                  setShowEmployeeDropdown(true);
+                }}
+                onClick={() => setShowEmployeeDropdown(true)}
               />
-              {employeeSearch && (
-                <Command className="rounded-lg border shadow-md mt-2 absolute z-10 bg-white w-[calc(50%-1rem)]">
-                  <CommandList>
-                    <CommandEmpty>No employee found.</CommandEmpty>
-                    <CommandGroup>
-                      {filteredEmployees.map((employee) => (
-                        <CommandItem
-                          key={employee.empno}
-                          onSelect={() => {
-                            setNewSale({
-                              ...newSale, 
-                              employee: `${employee.firstname} ${employee.lastname}`,
-                              employeeId: employee.empno
-                            });
-                            setEmployeeSearch("");
-                          }}
-                        >
-                          {`${employee.firstname} ${employee.lastname}`}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
+              {showEmployeeDropdown && employeeSearch && (
+                <div className="absolute z-50 w-full bg-white border rounded-md shadow-md mt-1 max-h-56 overflow-y-auto">
+                  {filteredEmployees.length === 0 ? (
+                    <div className="p-2 text-sm text-gray-500">No employees found</div>
+                  ) : (
+                    filteredEmployees.map((employee) => (
+                      <div 
+                        key={employee.empno} 
+                        className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          setNewSale({
+                            ...newSale, 
+                            employee: `${employee.firstname} ${employee.lastname}`,
+                            employeeId: employee.empno
+                          });
+                          setEmployeeSearch('');
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
+                        {`${employee.firstname} ${employee.lastname}`}
+                      </div>
+                    ))
+                  )}
+                </div>
               )}
             </div>
           </div>
           
           <div className="flex flex-col space-y-4">
             <div className="flex items-end gap-3">
-              <div className="flex-1 space-y-2">
+              <div className="flex-1 space-y-2 relative">
                 <Label htmlFor="product">Product</Label>
                 <Input 
                   placeholder={currentProductItem.product || "Search products..."}
                   value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
+                  onChange={(e) => {
+                    setProductSearch(e.target.value);
+                    setShowProductDropdown(true);
+                  }}
+                  onClick={() => setShowProductDropdown(true)}
                 />
-                {productSearch && (
-                  <Command className="rounded-lg border shadow-md mt-2 absolute z-10 bg-white w-[calc(50%-1rem)]">
-                    <CommandList>
-                      <CommandEmpty>No product found.</CommandEmpty>
-                      <CommandGroup>
-                        {filteredProducts.map((product) => (
-                          <CommandItem
-                            key={product.prodcode}
-                            onSelect={() => {
-                              handleProductSelect(product.prodcode);
-                              setProductSearch(product.description || "");
-                            }}
-                          >
-                            {product.description}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
+                {showProductDropdown && productSearch && (
+                  <div className="absolute z-50 w-full bg-white border rounded-md shadow-md mt-1 max-h-56 overflow-y-auto">
+                    {filteredProducts.length === 0 ? (
+                      <div className="p-2 text-sm text-gray-500">No products found</div>
+                    ) : (
+                      filteredProducts.map((product) => (
+                        <div
+                          key={product.prodcode}
+                          className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          onClick={() => handleProductSelect(product.prodcode)}
+                        >
+                          {product.description}
+                        </div>
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
               
@@ -777,7 +799,7 @@ const Sales: React.FC = () => {
                       <TableHead>Unit Price</TableHead>
                       <TableHead>Current Price</TableHead>
                       <TableHead>Amount</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead className="w-20"></TableHead> {/* Removed "Actions" header */}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -789,7 +811,7 @@ const Sales: React.FC = () => {
                         <TableCell>{formatCurrency(item.currentPrice)}</TableCell>
                         <TableCell>{formatCurrency(item.amount)}</TableCell>
                         <TableCell>
-                          <div className="flex gap-2">
+                          <div className="flex gap-1"> {/* Reduced gap from gap-2 to gap-1 */}
                             <Button 
                               variant="ghost" 
                               size="sm" 
