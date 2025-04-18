@@ -391,7 +391,45 @@ const Sales: React.FC = () => {
   const handleViewSale = (id: string) => {
     navigate(`/sales/${id}`);
   };
-  
+
+  const handleEditSale = (id: string) => {
+    navigate(`/sales/${id}/edit`);
+  };
+
+  const handleDeleteSale = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this sale?')) {
+      try {
+        const { error: deleteDetailError } = await supabase
+          .from('salesdetail')
+          .delete()
+          .eq('transno', id);
+
+        if (deleteDetailError) throw deleteDetailError;
+
+        const { error: deleteSaleError } = await supabase
+          .from('sales')
+          .delete()
+          .eq('transno', id);
+
+        if (deleteSaleError) throw deleteSaleError;
+
+        setSalesData(prev => prev.filter(sale => sale.id !== id));
+        
+        toast({
+          title: "Sale deleted",
+          description: "The sale has been deleted successfully"
+        });
+      } catch (error) {
+        console.error('Error deleting sale:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete sale. Please try again.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
   const handleNewSaleOpen = () => {
     setIsNewSaleDialogOpen(true);
   };
@@ -560,76 +598,91 @@ const Sales: React.FC = () => {
           <CardDescription>Manage and view all sales transactions</CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[600px] w-full">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Sales No</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead>Unit Price</TableHead>
-                  <TableHead>Current Price</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead className="w-[80px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
+          <ScrollArea className="h-[600px] w-full rounded-md border">
+            <div className="relative">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                    </TableCell>
+                    <TableHead>Sales No</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Unit Price</TableHead>
+                    <TableHead>Current Price</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
-                ) : salesData.map((sale) => (
-                  <React.Fragment key={sale.id}>
-                    {sale.products.map((product, idx) => (
-                      <TableRow key={`${sale.id}-${idx}`}>
-                        {idx === 0 ? (
-                          <>
-                            <TableCell>{sale.saleNumber}</TableCell>
-                            <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
-                            <TableCell>{sale.customer}</TableCell>
-                            <TableCell>{sale.employee}</TableCell>
-                          </>
-                        ) : (
-                          <>
-                            <TableCell></TableCell>
-                            <TableCell></TableCell>
-                            <TableCell></TableCell>
-                            <TableCell></TableCell>
-                          </>
-                        )}
-                        <TableCell>{product.product}</TableCell>
-                        <TableCell>{product.quantity}</TableCell>
-                        <TableCell>{formatCurrency(product.unitPrice)}</TableCell>
-                        <TableCell>{formatCurrency(product.currentPrice)}</TableCell>
-                        <TableCell>{formatCurrency(product.amount)}</TableCell>
-                        {idx === 0 ? (
-                          <TableCell>
-                            <Button variant="outline" size="sm" onClick={() => handleViewSale(sale.id)}>
-                              View
-                            </Button>
-                          </TableCell>
-                        ) : (
-                          <TableCell></TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                    <TableRow className="bg-muted/50">
-                      <TableCell colSpan={8} className="text-right font-bold">
-                        Total Amount:
-                      </TableCell>
-                      <TableCell colSpan={2} className="font-bold">
-                        {formatCurrency(sale.totalAmount)}
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="text-center">
+                        <Loader2 className="h-8 w-8 animate-spin mx-auto" />
                       </TableCell>
                     </TableRow>
-                  </React.Fragment>
-                ))}
-              </TableBody>
-            </Table>
+                  ) : salesData.map((sale) => (
+                    <React.Fragment key={sale.id}>
+                      {sale.products.map((product, idx) => (
+                        <TableRow key={`${sale.id}-${idx}`}>
+                          {idx === 0 ? (
+                            <>
+                              <TableCell>{sale.saleNumber}</TableCell>
+                              <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
+                              <TableCell>{sale.customer}</TableCell>
+                              <TableCell>{sale.employee}</TableCell>
+                            </>
+                          ) : (
+                            <>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                            </>
+                          )}
+                          <TableCell>{product.product}</TableCell>
+                          <TableCell>{product.quantity}</TableCell>
+                          <TableCell>{formatCurrency(product.unitPrice)}</TableCell>
+                          <TableCell>{formatCurrency(product.currentPrice)}</TableCell>
+                          <TableCell>{formatCurrency(product.amount)}</TableCell>
+                          {idx === 0 ? (
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={() => handleEditSale(sale.id)}
+                                >
+                                  <Pencil className="h-4 w-4 text-blue-500" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={() => handleDeleteSale(sale.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          ) : (
+                            <TableCell></TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                      <TableRow className="bg-muted/50">
+                        <TableCell colSpan={8} className="text-right font-bold">
+                          Total Amount:
+                        </TableCell>
+                        <TableCell colSpan={2} className="font-bold">
+                          {formatCurrency(sale.totalAmount)}
+                        </TableCell>
+                      </TableRow>
+                    </React.Fragment>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </ScrollArea>
         </CardContent>
       </Card>
