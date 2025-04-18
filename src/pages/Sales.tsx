@@ -25,11 +25,14 @@ interface SaleWithDetails {
   date: string;
   customer: string;
   employee: string;
-  product: string;
-  quantity: number;
-  unitPrice: number;
-  currentPrice: number;
-  amount: number;
+  products: {
+    product: string;
+    quantity: number;
+    unitPrice: number;
+    currentPrice: number;
+    amount: number;
+  }[];
+  totalAmount: number;
 }
 
 interface SaleItem {
@@ -175,21 +178,32 @@ const Sales: React.FC = () => {
           }, {});
 
           const formattedSales: SaleWithDetails[] = salesDetails.map((sale: any) => {
-            const product = sale.salesdetail?.[0]?.product?.description || 'N/A';
-            const quantity = sale.salesdetail?.[0]?.quantity || 0;
-            const prodCode = sale.salesdetail?.[0]?.product?.prodcode;
-            const saleDate = sale.salesdate;
-            
-            let unitPrice = 0;
-            if (historicalPrices?.[prodCode]) {
-              const pricesBeforeSale = historicalPrices[prodCode]
-                .filter(price => new Date(price.effdate) <= new Date(saleDate))
-                .sort((a, b) => new Date(b.effdate).getTime() - new Date(a.effdate).getTime());
+            const products = sale.salesdetail?.map((detail: any) => {
+              const prodCode = detail.product?.prodcode;
+              const saleDate = sale.salesdate;
               
-              unitPrice = pricesBeforeSale[0]?.unitprice || 0;
-            }
+              let unitPrice = 0;
+              if (historicalPrices?.[prodCode]) {
+                const pricesBeforeSale = historicalPrices[prodCode]
+                  .filter(price => new Date(price.effdate) <= new Date(saleDate))
+                  .sort((a, b) => new Date(b.effdate).getTime() - new Date(a.effdate).getTime());
+                
+                unitPrice = pricesBeforeSale[0]?.unitprice || 0;
+              }
 
-            const currentPrice = latestPrices?.[prodCode] || 0;
+              const currentPrice = latestPrices?.[prodCode] || 0;
+              const amount = detail.quantity * currentPrice;
+
+              return {
+                product: detail.product?.description || 'N/A',
+                quantity: detail.quantity || 0,
+                unitPrice,
+                currentPrice,
+                amount
+              };
+            }) || [];
+
+            const totalAmount = products.reduce((sum: number, product: any) => sum + product.amount, 0);
 
             return {
               id: sale.transno,
@@ -197,11 +211,8 @@ const Sales: React.FC = () => {
               date: sale.salesdate,
               customer: sale.customer?.custname || 'N/A',
               employee: `${sale.employee?.firstname || ''} ${sale.employee?.lastname || ''}`.trim() || 'N/A',
-              product,
-              quantity,
-              unitPrice,
-              currentPrice,
-              amount: quantity * currentPrice
+              products,
+              totalAmount
             };
           });
 
@@ -508,11 +519,14 @@ const Sales: React.FC = () => {
           date: newSale.date,
           customer: newSale.customer,
           employee: newSale.employee,
-          product: item.product,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          currentPrice: item.currentPrice,
-          amount: item.quantity * item.currentPrice
+          products: [{
+            product: item.product,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            currentPrice: item.currentPrice,
+            amount: item.quantity * item.currentPrice
+          }],
+          totalAmount: item.quantity * item.currentPrice
         };
       });
       
@@ -546,7 +560,7 @@ const Sales: React.FC = () => {
           <CardDescription>Manage and view all sales transactions</CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[600px]">
+          <ScrollArea className="h-[600px] w-full">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -559,7 +573,7 @@ const Sales: React.FC = () => {
                   <TableHead>Unit Price</TableHead>
                   <TableHead>Current Price</TableHead>
                   <TableHead>Amount</TableHead>
-                  <TableHead className="w-[100px]"></TableHead>
+                  <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -570,24 +584,49 @@ const Sales: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : salesData.map((sale) => (
-                  <TableRow key={sale.id}>
-                    <TableCell>{sale.saleNumber}</TableCell>
-                    <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
-                    <TableCell>{sale.customer}</TableCell>
-                    <TableCell>{sale.employee}</TableCell>
-                    <TableCell>{sale.product}</TableCell>
-                    <TableCell>{sale.quantity}</TableCell>
-                    <TableCell>{formatCurrency(sale.unitPrice)}</TableCell>
-                    <TableCell>{formatCurrency(sale.currentPrice)}</TableCell>
-                    <TableCell>{formatCurrency(sale.amount)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 justify-end">
-                        <Button variant="outline" size="sm" onClick={() => handleViewSale(sale.id)}>
-                          View
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <React.Fragment key={sale.id}>
+                    {sale.products.map((product, idx) => (
+                      <TableRow key={`${sale.id}-${idx}`}>
+                        {idx === 0 ? (
+                          <>
+                            <TableCell>{sale.saleNumber}</TableCell>
+                            <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
+                            <TableCell>{sale.customer}</TableCell>
+                            <TableCell>{sale.employee}</TableCell>
+                          </>
+                        ) : (
+                          <>
+                            <TableCell></TableCell>
+                            <TableCell></TableCell>
+                            <TableCell></TableCell>
+                            <TableCell></TableCell>
+                          </>
+                        )}
+                        <TableCell>{product.product}</TableCell>
+                        <TableCell>{product.quantity}</TableCell>
+                        <TableCell>{formatCurrency(product.unitPrice)}</TableCell>
+                        <TableCell>{formatCurrency(product.currentPrice)}</TableCell>
+                        <TableCell>{formatCurrency(product.amount)}</TableCell>
+                        {idx === 0 ? (
+                          <TableCell>
+                            <Button variant="outline" size="sm" onClick={() => handleViewSale(sale.id)}>
+                              View
+                            </Button>
+                          </TableCell>
+                        ) : (
+                          <TableCell></TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-muted/50">
+                      <TableCell colSpan={8} className="text-right font-bold">
+                        Total Amount:
+                      </TableCell>
+                      <TableCell colSpan={2} className="font-bold">
+                        {formatCurrency(sale.totalAmount)}
+                      </TableCell>
+                    </TableRow>
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
