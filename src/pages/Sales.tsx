@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -188,17 +189,19 @@ const Sales: React.FC = () => {
               unitPrice = pricesBeforeSale[0]?.unitprice || 0;
             }
 
+            const currentPrice = latestPrices?.[prodCode] || 0;
+
             return {
               id: sale.transno,
-              saleNumber: `SALE ${sale.transno}`,
+              saleNumber: sale.transno,
               date: sale.salesdate,
               customer: sale.customer?.custname || 'N/A',
               employee: `${sale.employee?.firstname || ''} ${sale.employee?.lastname || ''}`.trim() || 'N/A',
               product,
               quantity,
               unitPrice,
-              currentPrice: latestPrices?.[prodCode] || 0,
-              amount: quantity * unitPrice
+              currentPrice,
+              amount: quantity * currentPrice
             };
           });
 
@@ -441,19 +444,26 @@ const Sales: React.FC = () => {
     try {
       setSavingOrder(true);
       
-      const timestamp = Date.now() % 10000;
-      const randomChars = Math.random().toString(36).substring(2, 6);
-      const transNo = `T${timestamp}${randomChars}`.substring(0, 8);
-      
-      console.log("Creating sale with transaction number:", transNo);
-      console.log("Customer ID:", newSale.customerId);
-      console.log("Employee ID:", newSale.employeeId);
-      console.log("Sale date:", newSale.date);
+      const { data: latestSale, error: fetchError } = await supabase
+        .from('sales')
+        .select('transno')
+        .order('transno', { ascending: false })
+        .limit(1);
+
+      if (fetchError) {
+        throw new Error(`Error fetching latest sale: ${fetchError.message}`);
+      }
+
+      let nextTransNo = 'TR00001';
+      if (latestSale && latestSale.length > 0) {
+        const lastNumber = parseInt(latestSale[0].transno.replace('TR', ''));
+        nextTransNo = `TR${String(lastNumber + 1).padStart(5, '0')}`;
+      }
       
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
         .insert({
-          transno: transNo,
+          transno: nextTransNo,
           custno: newSale.customerId,
           empno: newSale.employeeId,
           salesdate: newSale.date
@@ -473,7 +483,7 @@ const Sales: React.FC = () => {
         const { error: detailError } = await supabase
           .from('salesdetail')
           .insert({
-            transno: transNo,
+            transno: nextTransNo,
             prodcode: item.productId,
             quantity: item.quantity
           });
@@ -488,13 +498,13 @@ const Sales: React.FC = () => {
       
       toast({
         title: "Sale created",
-        description: `New sale created for ${newSale.customer}`,
+        description: `New sale created with number ${nextTransNo}`,
       });
 
       const newSaleItems: SaleWithDetails[] = newSale.items.map((item, index) => {
         return {
-          id: index === 0 ? transNo : `${transNo}-${index}`,
-          saleNumber: index === 0 ? `SALE ${transNo}` : `SALE ${transNo} (item ${index + 1})`,
+          id: nextTransNo,
+          saleNumber: `SALE ${nextTransNo}`,
           date: newSale.date,
           customer: newSale.customer,
           employee: newSale.employee,
@@ -502,7 +512,7 @@ const Sales: React.FC = () => {
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           currentPrice: item.currentPrice,
-          amount: item.amount
+          amount: item.quantity * item.currentPrice
         };
       });
       
@@ -536,48 +546,52 @@ const Sales: React.FC = () => {
           <CardDescription>Manage and view all sales transactions</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Sales No</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Employee</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Unit Price</TableHead>
-                <TableHead>Current Price</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+          <ScrollArea className="h-[600px]">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                  </TableCell>
+                  <TableHead>Sales No</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>Product</TableHead>
+                  <TableHead>Quantity</TableHead>
+                  <TableHead>Unit Price</TableHead>
+                  <TableHead>Current Price</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead className="w-[100px]"></TableHead>
                 </TableRow>
-              ) : salesData.map((sale) => (
-                <TableRow key={sale.id}>
-                  <TableCell>{sale.saleNumber}</TableCell>
-                  <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
-                  <TableCell>{sale.customer}</TableCell>
-                  <TableCell>{sale.employee}</TableCell>
-                  <TableCell>{sale.product}</TableCell>
-                  <TableCell>{sale.quantity}</TableCell>
-                  <TableCell>{formatCurrency(sale.unitPrice)}</TableCell>
-                  <TableCell>{formatCurrency(sale.currentPrice)}</TableCell>
-                  <TableCell>{formatCurrency(sale.amount)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" onClick={() => handleViewSale(sale.id)}>
-                      View
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                    </TableCell>
+                  </TableRow>
+                ) : salesData.map((sale) => (
+                  <TableRow key={sale.id}>
+                    <TableCell>{sale.saleNumber}</TableCell>
+                    <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
+                    <TableCell>{sale.customer}</TableCell>
+                    <TableCell>{sale.employee}</TableCell>
+                    <TableCell>{sale.product}</TableCell>
+                    <TableCell>{sale.quantity}</TableCell>
+                    <TableCell>{formatCurrency(sale.unitPrice)}</TableCell>
+                    <TableCell>{formatCurrency(sale.currentPrice)}</TableCell>
+                    <TableCell>{formatCurrency(sale.amount)}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1 justify-end">
+                        <Button variant="outline" size="sm" onClick={() => handleViewSale(sale.id)}>
+                          View
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
         </CardContent>
       </Card>
 
