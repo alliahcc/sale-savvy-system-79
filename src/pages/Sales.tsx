@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,6 +57,7 @@ const Sales: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isNewSaleDialogOpen, setIsNewSaleDialogOpen] = useState(false);
+  const [isEditSaleDialogOpen, setIsEditSaleDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
@@ -68,6 +70,7 @@ const Sales: React.FC = () => {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const [currentEditingSale, setCurrentEditingSale] = useState<string | null>(null);
   const [currentProductItem, setCurrentProductItem] = useState<SaleItem>({
     productId: "",
     product: "",
@@ -78,6 +81,17 @@ const Sales: React.FC = () => {
   });
   
   const [newSale, setNewSale] = useState({
+    customer: "",
+    customerId: "",
+    employee: "",
+    employeeId: "",
+    date: new Date().toISOString().split('T')[0],
+    items: [] as SaleItem[],
+    totalAmount: 0
+  });
+  
+  const [editSale, setEditSale] = useState({
+    id: "",
     customer: "",
     customerId: "",
     employee: "",
@@ -289,16 +303,29 @@ const Sales: React.FC = () => {
       return;
     }
     
-    setNewSale(prev => {
-      const updatedItems = [...prev.items, currentProductItem];
-      const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
-      
-      return {
-        ...prev,
-        items: updatedItems,
-        totalAmount
-      };
-    });
+    if (isEditSaleDialogOpen) {
+      setEditSale(prev => {
+        const updatedItems = [...prev.items, currentProductItem];
+        const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
+        
+        return {
+          ...prev,
+          items: updatedItems,
+          totalAmount
+        };
+      });
+    } else {
+      setNewSale(prev => {
+        const updatedItems = [...prev.items, currentProductItem];
+        const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
+        
+        return {
+          ...prev,
+          items: updatedItems,
+          totalAmount
+        };
+      });
+    }
     
     setCurrentProductItem({
       productId: "",
@@ -314,7 +341,13 @@ const Sales: React.FC = () => {
 
   const handleEditItem = (index: number) => {
     setEditingItemIndex(index);
-    const itemToEdit = newSale.items[index];
+    let itemToEdit: SaleItem;
+    
+    if (isEditSaleDialogOpen) {
+      itemToEdit = editSale.items[index];
+    } else {
+      itemToEdit = newSale.items[index];
+    }
 
     setCurrentProductItem({
       ...itemToEdit
@@ -333,21 +366,39 @@ const Sales: React.FC = () => {
       return;
     }
 
-    setNewSale(prev => {
-      const updatedItems = [...prev.items];
-      updatedItems[index] = {
-        ...currentProductItem,
-        amount: currentProductItem.currentPrice * currentProductItem.quantity
-      };
-      
-      const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
-      
-      return {
-        ...prev,
-        items: updatedItems,
-        totalAmount
-      };
-    });
+    if (isEditSaleDialogOpen) {
+      setEditSale(prev => {
+        const updatedItems = [...prev.items];
+        updatedItems[index] = {
+          ...currentProductItem,
+          amount: currentProductItem.currentPrice * currentProductItem.quantity
+        };
+        
+        const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
+        
+        return {
+          ...prev,
+          items: updatedItems,
+          totalAmount
+        };
+      });
+    } else {
+      setNewSale(prev => {
+        const updatedItems = [...prev.items];
+        updatedItems[index] = {
+          ...currentProductItem,
+          amount: currentProductItem.currentPrice * currentProductItem.quantity
+        };
+        
+        const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
+        
+        return {
+          ...prev,
+          items: updatedItems,
+          totalAmount
+        };
+      });
+    }
     
     setEditingItemIndex(null);
     setCurrentProductItem({
@@ -376,16 +427,29 @@ const Sales: React.FC = () => {
       setProductSearch("");
     }
 
-    setNewSale(prev => {
-      const updatedItems = prev.items.filter((_, i) => i !== index);
-      const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
-      
-      return {
-        ...prev,
-        items: updatedItems,
-        totalAmount
-      };
-    });
+    if (isEditSaleDialogOpen) {
+      setEditSale(prev => {
+        const updatedItems = prev.items.filter((_, i) => i !== index);
+        const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
+        
+        return {
+          ...prev,
+          items: updatedItems,
+          totalAmount
+        };
+      });
+    } else {
+      setNewSale(prev => {
+        const updatedItems = prev.items.filter((_, i) => i !== index);
+        const totalAmount = updatedItems.reduce((total, item) => total + item.amount, 0);
+        
+        return {
+          ...prev,
+          items: updatedItems,
+          totalAmount
+        };
+      });
+    }
   };
   
   const handleViewSale = (id: string) => {
@@ -393,7 +457,63 @@ const Sales: React.FC = () => {
   };
 
   const handleEditSale = (id: string) => {
-    navigate(`/sales/${id}/edit`);
+    const sale = salesData.find(sale => sale.id === id);
+    if (!sale) {
+      toast({
+        title: "Error",
+        description: "Sale not found",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setCurrentEditingSale(id);
+    
+    const { data: saleDetail, error: saleDetailError } = supabase
+      .from('sales')
+      .select('custno, empno, salesdate')
+      .eq('transno', id)
+      .single();
+    
+    if (saleDetailError) {
+      console.error('Error fetching sale details:', saleDetailError);
+      toast({
+        title: "Error",
+        description: "Failed to fetch sale details",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Find customer and employee data
+    const customer = customers.find(cust => cust.custno === saleDetail.custno);
+    const employee = employees.find(emp => emp.empno === saleDetail.empno);
+    
+    // Convert sale products to edit format
+    const items = sale.products.map(product => {
+      const productData = products.find(p => p.description === product.product);
+      return {
+        productId: productData?.prodcode || '',
+        product: product.product,
+        quantity: product.quantity,
+        unitPrice: product.unitPrice,
+        currentPrice: product.currentPrice,
+        amount: product.quantity * product.currentPrice
+      };
+    });
+    
+    setEditSale({
+      id: id,
+      customer: sale.customer,
+      customerId: customer?.custno || '',
+      employee: sale.employee,
+      employeeId: employee?.empno || '',
+      date: sale.date,
+      items,
+      totalAmount: items.reduce((total, item) => total + item.amount, 0)
+    });
+    
+    setIsEditSaleDialogOpen(true);
   };
 
   const handleDeleteSale = async (id: string) => {
@@ -462,6 +582,146 @@ const Sales: React.FC = () => {
     setEditingItemIndex(null);
   };
   
+  const handleEditSaleClose = () => {
+    setIsEditSaleDialogOpen(false);
+    setEditSale({
+      id: "",
+      customer: "",
+      customerId: "",
+      employee: "",
+      employeeId: "",
+      date: new Date().toISOString().split('T')[0],
+      items: [],
+      totalAmount: 0
+    });
+    setCurrentProductItem({
+      productId: "",
+      product: "",
+      quantity: 1,
+      unitPrice: 0,
+      currentPrice: 0,
+      amount: 0
+    });
+    setCustomerSearch("");
+    setEmployeeSearch("");
+    setProductSearch("");
+    setShowCustomerDropdown(false);
+    setShowEmployeeDropdown(false);
+    setShowProductDropdown(false);
+    setEditingItemIndex(null);
+    setCurrentEditingSale(null);
+  };
+  
+  const handleUpdateSale = async () => {
+    if (!editSale.customerId) {
+      toast({
+        title: "Error",
+        description: "Please select a customer",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!editSale.employeeId) {
+      toast({
+        title: "Error",
+        description: "Please select an employee",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (editSale.items.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one product",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setSavingOrder(true);
+      
+      // Update the main sale record
+      const { error: updateSaleError } = await supabase
+        .from('sales')
+        .update({
+          custno: editSale.customerId,
+          empno: editSale.employeeId,
+          salesdate: editSale.date
+        })
+        .eq('transno', editSale.id);
+      
+      if (updateSaleError) {
+        throw new Error(`Error updating sale: ${updateSaleError.message}`);
+      }
+      
+      // Delete existing sale details
+      const { error: deleteSaleDetailsError } = await supabase
+        .from('salesdetail')
+        .delete()
+        .eq('transno', editSale.id);
+      
+      if (deleteSaleDetailsError) {
+        throw new Error(`Error removing existing details: ${deleteSaleDetailsError.message}`);
+      }
+      
+      // Insert updated sale details
+      for (const item of editSale.items) {
+        const { error: detailError } = await supabase
+          .from('salesdetail')
+          .insert({
+            transno: editSale.id,
+            prodcode: item.productId,
+            quantity: item.quantity
+          });
+          
+        if (detailError) {
+          throw new Error(`Error adding product: ${detailError.message}`);
+        }
+      }
+      
+      // Update the UI
+      setSalesData(prev => {
+        const updatedSales = prev.filter(sale => sale.id !== editSale.id);
+        const updatedSale = {
+          id: editSale.id,
+          saleNumber: editSale.id,
+          date: editSale.date,
+          customer: editSale.customer,
+          employee: editSale.employee,
+          products: editSale.items.map(item => ({
+            product: item.product,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            currentPrice: item.currentPrice,
+            amount: item.quantity * item.currentPrice
+          })),
+          totalAmount: editSale.totalAmount
+        };
+        
+        return [updatedSale, ...updatedSales];
+      });
+      
+      toast({
+        title: "Sale updated",
+        description: `Sale ${editSale.id} has been updated successfully`,
+      });
+      
+      handleEditSaleClose();
+    } catch (error) {
+      console.error('Error updating sale:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update sale. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+  
   const handleNewSaleSubmit = async () => {
     if (!newSale.customerId) {
       toast({
@@ -509,22 +769,21 @@ const Sales: React.FC = () => {
         nextTransNo = `TR${String(lastNumber + 1).padStart(5, '0')}`;
       }
       
-      const { data: salesData, error: salesError } = await supabase
+      const { error: salesError } = await supabase
         .from('sales')
         .insert({
           transno: nextTransNo,
           custno: newSale.customerId,
           empno: newSale.employeeId,
           salesdate: newSale.date
-        })
-        .select();
+        });
         
       if (salesError) {
         console.error('Error creating sale record:', salesError);
         throw new Error(`Error creating sale: ${salesError.message}`);
       }
       
-      console.log("Sale created successfully:", salesData);
+      console.log("Sale created successfully:", nextTransNo);
       
       for (const item of newSale.items) {
         console.log("Adding product:", item.productId, "quantity:", item.quantity);
@@ -550,25 +809,23 @@ const Sales: React.FC = () => {
         description: `New sale created with number ${nextTransNo}`,
       });
 
-      const newSaleItems: SaleWithDetails[] = newSale.items.map((item, index) => {
-        return {
-          id: nextTransNo,
-          saleNumber: `SALE ${nextTransNo}`,
-          date: newSale.date,
-          customer: newSale.customer,
-          employee: newSale.employee,
-          products: [{
-            product: item.product,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            currentPrice: item.currentPrice,
-            amount: item.quantity * item.currentPrice
-          }],
-          totalAmount: item.quantity * item.currentPrice
-        };
-      });
+      const newSaleItem: SaleWithDetails = {
+        id: nextTransNo,
+        saleNumber: nextTransNo,
+        date: newSale.date,
+        customer: newSale.customer,
+        employee: newSale.employee,
+        products: newSale.items.map(item => ({
+          product: item.product,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          currentPrice: item.currentPrice,
+          amount: item.quantity * item.currentPrice
+        })),
+        totalAmount: newSale.totalAmount
+      };
       
-      setSalesData(prev => [...newSaleItems, ...prev]);
+      setSalesData(prev => [newSaleItem, ...prev]);
       
       handleNewSaleClose();
     } catch (error) {
@@ -601,7 +858,7 @@ const Sales: React.FC = () => {
           <ScrollArea className="h-[600px] w-full rounded-md border">
             <div className="relative">
               <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
+                <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
                   <TableRow>
                     <TableHead>Sales No</TableHead>
                     <TableHead>Date</TableHead>
@@ -612,7 +869,7 @@ const Sales: React.FC = () => {
                     <TableHead>Unit Price</TableHead>
                     <TableHead>Current Price</TableHead>
                     <TableHead>Amount</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
+                    <TableHead className="w-[100px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -687,6 +944,7 @@ const Sales: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* New Sale Dialog */}
       <Dialog open={isNewSaleDialogOpen} onOpenChange={setIsNewSaleDialogOpen}>
         <DialogContent className="sm:max-w-[800px]">
           <DialogHeader>
@@ -925,6 +1183,251 @@ const Sales: React.FC = () => {
                 </>
               ) : (
                 'Create Sale'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Edit Sale Dialog */}
+      <Dialog open={isEditSaleDialogOpen} onOpenChange={setIsEditSaleDialogOpen}>
+        <DialogContent className="sm:max-w-[800px]">
+          <DialogHeader>
+            <DialogTitle>Edit Sale {editSale.id}</DialogTitle>
+            <DialogDescription>
+              Update the details for this sale.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex justify-between items-center">
+            <div></div>
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="edit-date">Date:</Label>
+              <Input
+                id="edit-date"
+                type="date"
+                value={editSale.date}
+                onChange={(e) => setEditSale({...editSale, date: e.target.value})}
+                className="w-40"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2 relative">
+              <Label htmlFor="edit-customer">Customer</Label>
+              <Input 
+                placeholder={editSale.customer || "Search customers..."}
+                value={customerSearch || editSale.customer}
+                onChange={(e) => {
+                  setCustomerSearch(e.target.value);
+                  setShowCustomerDropdown(true);
+                }}
+                onClick={() => setShowCustomerDropdown(true)}
+              />
+              {showCustomerDropdown && customerSearch && (
+                <div className="absolute z-50 w-full bg-white border rounded-md shadow-md mt-1 max-h-56 overflow-y-auto">
+                  {filteredCustomers.length === 0 ? (
+                    <div className="p-2 text-sm text-gray-500">No customers found</div>
+                  ) : (
+                    filteredCustomers.map((customer) => (
+                      <div 
+                        key={customer.custno} 
+                        className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          setEditSale({
+                            ...editSale, 
+                            customer: customer.custname || '',
+                            customerId: customer.custno
+                          });
+                          setCustomerSearch('');
+                          setShowCustomerDropdown(false);
+                        }}
+                      >
+                        {customer.custname}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 relative">
+              <Label htmlFor="edit-employee">Employee</Label>
+              <Input 
+                placeholder={editSale.employee || "Search employees..."}
+                value={employeeSearch || editSale.employee}
+                onChange={(e) => {
+                  setEmployeeSearch(e.target.value);
+                  setShowEmployeeDropdown(true);
+                }}
+                onClick={() => setShowEmployeeDropdown(true)}
+              />
+              {showEmployeeDropdown && employeeSearch && (
+                <div className="absolute z-50 w-full bg-white border rounded-md shadow-md mt-1 max-h-56 overflow-y-auto">
+                  {filteredEmployees.length === 0 ? (
+                    <div className="p-2 text-sm text-gray-500">No employees found</div>
+                  ) : (
+                    filteredEmployees.map((employee) => (
+                      <div 
+                        key={employee.empno} 
+                        className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          setEditSale({
+                            ...editSale, 
+                            employee: `${employee.firstname} ${employee.lastname}`,
+                            employeeId: employee.empno
+                          });
+                          setEmployeeSearch('');
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
+                        {`${employee.firstname} ${employee.lastname}`}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex flex-col space-y-4">
+            <div className="flex items-end gap-3">
+              <div className="flex-1 space-y-2 relative">
+                <Label htmlFor="edit-product">Product</Label>
+                <Input 
+                  placeholder={currentProductItem.product || "Search products..."}
+                  value={productSearch}
+                  onChange={(e) => {
+                    setProductSearch(e.target.value);
+                    setShowProductDropdown(true);
+                  }}
+                  onClick={() => setShowProductDropdown(true)}
+                />
+                {showProductDropdown && productSearch && (
+                  <div className="absolute z-50 w-full bg-white border rounded-md shadow-md mt-1 max-h-56 overflow-y-auto">
+                    {filteredProducts.length === 0 ? (
+                      <div className="p-2 text-sm text-gray-500">No products found</div>
+                    ) : (
+                      filteredProducts.map((product) => (
+                        <div
+                          key={product.prodcode}
+                          className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          onClick={() => handleProductSelect(product.prodcode)}
+                        >
+                          {product.description}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              <div className="w-24 space-y-2">
+                <Label htmlFor="edit-quantity">Quantity</Label>
+                <Input
+                  id="edit-quantity"
+                  type="number"
+                  min="1"
+                  value={currentProductItem.quantity}
+                  onChange={(e) => handleQuantityChange(Number(e.target.value))}
+                />
+              </div>
+              
+              <div className="w-32 space-y-2">
+                <Label htmlFor="edit-unit-price">Unit Price</Label>
+                <Input
+                  id="edit-unit-price"
+                  value={formatCurrency(currentProductItem.unitPrice)}
+                  disabled
+                />
+              </div>
+              
+              <div className="w-32 space-y-2">
+                <Label htmlFor="edit-current-price">Current Price</Label>
+                <Input
+                  id="edit-current-price"
+                  value={formatCurrency(currentProductItem.currentPrice)}
+                  disabled
+                />
+              </div>
+              
+              {editingItemIndex !== null ? (
+                <Button onClick={() => handleSaveEdit(editingItemIndex)}>
+                  <Save className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button onClick={handleAddProductToSale} disabled={!currentProductItem.productId}>
+                  <PlusIcon className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            
+            <div className="border rounded p-2">
+              <div className="font-bold mb-2">Cart Items</div>
+              {editSale.items.length === 0 ? (
+                <div className="text-muted-foreground text-center p-4">No items added yet</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Unit Price</TableHead>
+                      <TableHead>Current Price</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead className="w-20"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {editSale.items.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{item.product}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
+                        <TableCell>{formatCurrency(item.currentPrice)}</TableCell>
+                        <TableCell>{formatCurrency(item.amount)}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleEditItem(index)}
+                              disabled={editingItemIndex !== null}
+                            >
+                              <Pencil className="h-4 w-4 text-blue-500" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleRemoveItem(index)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-right font-bold">Total:</TableCell>
+                      <TableCell colSpan={2} className="font-bold">{formatCurrency(editSale.totalAmount)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={handleEditSaleClose} disabled={savingOrder}>Cancel</Button>
+            <Button onClick={handleUpdateSale} disabled={savingOrder}>
+              {savingOrder ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                'Save Changes'
               )}
             </Button>
           </DialogFooter>
