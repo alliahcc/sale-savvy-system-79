@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -478,62 +479,72 @@ const Sales: React.FC = () => {
     navigate(`/sales/${id}`);
   };
 
-  const handleEditSale = (id: string) => {
-    const sale = salesData.find(sale => sale.id === id);
-    if (!sale) {
+  const handleEditSale = async (id: string) => {
+    try {
+      const sale = salesData.find(sale => sale.id === id);
+      if (!sale) {
+        toast({
+          title: "Error",
+          description: "Sale not found",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      setCurrentEditingSale(id);
+      
+      // Fix the TypeScript error by using the correct method
+      const { data: saleDetail, error: saleDetailError } = await supabase
+        .from('sales')
+        .select('custno, empno, salesdate')
+        .eq('transno', id)
+        .single();
+      
+      if (saleDetailError) {
+        console.error('Error fetching sale details:', saleDetailError);
+        toast({
+          title: "Error",
+          description: "Failed to fetch sale details",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      const customer = customers.find(cust => cust.custno === saleDetail.custno);
+      const employee = employees.find(emp => emp.empno === saleDetail.empno);
+      
+      const items = sale.products.map(product => {
+        const productData = products.find(p => p.description === product.product);
+        return {
+          productId: productData?.prodcode || '',
+          product: product.product,
+          quantity: product.quantity,
+          unitPrice: product.unitPrice,
+          currentPrice: product.currentPrice,
+          amount: product.quantity * product.currentPrice
+        };
+      });
+      
+      setEditSale({
+        id: id,
+        customer: sale.customer,
+        customerId: saleDetail.custno || '',
+        employee: sale.employee,
+        employeeId: saleDetail.empno || '',
+        date: saleDetail.salesdate,
+        items,
+        totalAmount: items.reduce((total, item) => total + item.amount, 0)
+      });
+      
+      setIsEditSaleDialogOpen(true);
+    } catch (error) {
+      console.error('Error in handleEditSale:', error);
       toast({
         title: "Error",
-        description: "Sale not found",
+        description: "An unexpected error occurred while fetching sale details",
         variant: "destructive"
       });
-      return;
     }
-    
-    setCurrentEditingSale(id);
-    
-    const { data: saleDetail, error: saleDetailError } = supabase
-      .from('sales')
-      .select('custno, empno, salesdate')
-      .eq('transno', id)
-      .single();
-    
-    if (saleDetailError) {
-      console.error('Error fetching sale details:', saleDetailError);
-      toast({
-        title: "Error",
-        description: "Failed to fetch sale details",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const customer = customers.find(cust => cust.custno === saleDetail.custno);
-    const employee = employees.find(emp => emp.empno === saleDetail.empno);
-    
-    const items = sale.products.map(product => {
-      const productData = products.find(p => p.description === product.product);
-      return {
-        productId: productData?.prodcode || '',
-        product: product.product,
-        quantity: product.quantity,
-        unitPrice: product.unitPrice,
-        currentPrice: product.currentPrice,
-        amount: product.quantity * product.currentPrice
-      };
-    });
-    
-    setEditSale({
-      id: id,
-      customer: sale.customer,
-      customerId: customer?.custno || '',
-      employee: sale.employee,
-      employeeId: employee?.empno || '',
-      date: sale.date,
-      items,
-      totalAmount: items.reduce((total, item) => total + item.amount, 0)
-    });
-    
-    setIsEditSaleDialogOpen(true);
   };
 
   const handleDeleteSale = async (id: string) => {
@@ -663,6 +674,7 @@ const Sales: React.FC = () => {
     try {
       setSavingOrder(true);
       
+      // Update the sales record
       const { error: updateSaleError } = await supabase
         .from('sales')
         .update({
@@ -676,6 +688,7 @@ const Sales: React.FC = () => {
         throw new Error(`Error updating sale: ${updateSaleError.message}`);
       }
       
+      // Delete existing sales details
       const { error: deleteSaleDetailsError } = await supabase
         .from('salesdetail')
         .delete()
@@ -685,6 +698,7 @@ const Sales: React.FC = () => {
         throw new Error(`Error removing existing details: ${deleteSaleDetailsError.message}`);
       }
       
+      // Add new sales details
       for (const item of editSale.items) {
         const { error: detailError } = await supabase
           .from('salesdetail')
@@ -699,6 +713,7 @@ const Sales: React.FC = () => {
         }
       }
       
+      // Update the UI with the edited sale information
       setSalesData(prev => {
         const updatedSales = prev.filter(sale => sale.id !== editSale.id);
         const updatedSale = {
@@ -876,7 +891,7 @@ const Sales: React.FC = () => {
           <ScrollArea className="h-[600px] w-full rounded-md border">
             <div className="relative">
               <Table>
-                <TableHeader className="sticky top-0 bg-background z-10 border-b">
+                <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
                     <TableHead className="bg-background">Sales No</TableHead>
                     <TableHead className="bg-background">Date</TableHead>
@@ -962,6 +977,7 @@ const Sales: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* New Sale Dialog */}
       <Dialog open={isNewSaleDialogOpen} onOpenChange={setIsNewSaleDialogOpen}>
         <DialogContent className="sm:max-w-[800px]">
           <DialogHeader>
@@ -1206,6 +1222,7 @@ const Sales: React.FC = () => {
         </DialogContent>
       </Dialog>
       
+      {/* Edit Sale Dialog */}
       <Dialog open={isEditSaleDialogOpen} onOpenChange={setIsEditSaleDialogOpen}>
         <DialogContent className="sm:max-w-[800px]">
           <DialogHeader>
