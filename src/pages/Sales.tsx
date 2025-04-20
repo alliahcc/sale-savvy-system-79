@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -158,23 +157,41 @@ const Sales: React.FC = () => {
             )
           `);
 
-        if (salesError) throw salesError;
+        if (salesError) {
+          console.error('Error fetching sales:', salesError);
+          toast({
+            title: "Error",
+            description: "Failed to fetch sales data",
+            variant: "destructive"
+          });
+          return;
+        }
 
         if (salesDetails) {
           const productCodes = salesDetails
             .flatMap(sale => sale.salesdetail?.map(detail => detail.product?.prodcode))
             .filter(Boolean);
 
-          const { data: allPriceData } = await supabase
+          const { data: allPriceData, error: priceError } = await supabase
             .from('pricehist')
             .select('prodcode, unitprice, effdate')
             .in('prodcode', productCodes);
 
-          const { data: currentPriceData } = await supabase
+          if (priceError) {
+            console.error('Error fetching prices:', priceError);
+            return;
+          }
+
+          const { data: currentPriceData, error: currentPriceError } = await supabase
             .from('pricehist')
             .select('prodcode, unitprice, effdate')
             .in('prodcode', productCodes)
             .order('effdate', { ascending: false });
+
+          if (currentPriceError) {
+            console.error('Error fetching current prices:', currentPriceError);
+            return;
+          }
 
           const latestPrices = currentPriceData?.reduce((acc: Record<string, number>, curr) => {
             if (!acc[curr.prodcode]) {
@@ -234,13 +251,18 @@ const Sales: React.FC = () => {
         }
       } catch (error) {
         console.error('Error fetching sales data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch sales data",
+          variant: "destructive"
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchSalesData();
-  }, []);
+  }, [toast]);
 
   const handleProductSelect = async (productCode: string) => {
     try {
@@ -485,11 +507,9 @@ const Sales: React.FC = () => {
       return;
     }
     
-    // Find customer and employee data
     const customer = customers.find(cust => cust.custno === saleDetail.custno);
     const employee = employees.find(emp => emp.empno === saleDetail.empno);
     
-    // Convert sale products to edit format
     const items = sale.products.map(product => {
       const productData = products.find(p => p.description === product.product);
       return {
@@ -643,7 +663,6 @@ const Sales: React.FC = () => {
     try {
       setSavingOrder(true);
       
-      // Update the main sale record
       const { error: updateSaleError } = await supabase
         .from('sales')
         .update({
@@ -657,7 +676,6 @@ const Sales: React.FC = () => {
         throw new Error(`Error updating sale: ${updateSaleError.message}`);
       }
       
-      // Delete existing sale details
       const { error: deleteSaleDetailsError } = await supabase
         .from('salesdetail')
         .delete()
@@ -667,7 +685,6 @@ const Sales: React.FC = () => {
         throw new Error(`Error removing existing details: ${deleteSaleDetailsError.message}`);
       }
       
-      // Insert updated sale details
       for (const item of editSale.items) {
         const { error: detailError } = await supabase
           .from('salesdetail')
@@ -682,7 +699,6 @@ const Sales: React.FC = () => {
         }
       }
       
-      // Update the UI
       setSalesData(prev => {
         const updatedSales = prev.filter(sale => sale.id !== editSale.id);
         const updatedSale = {
@@ -701,7 +717,9 @@ const Sales: React.FC = () => {
           totalAmount: editSale.totalAmount
         };
         
-        return [updatedSale, ...updatedSales];
+        return [updatedSale, ...updatedSales].sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
       });
       
       toast({
@@ -858,18 +876,18 @@ const Sales: React.FC = () => {
           <ScrollArea className="h-[600px] w-full rounded-md border">
             <div className="relative">
               <Table>
-                <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
+                <TableHeader className="sticky top-0 bg-background z-10 border-b">
                   <TableRow>
-                    <TableHead>Sales No</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Quantity</TableHead>
-                    <TableHead>Unit Price</TableHead>
-                    <TableHead>Current Price</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead className="w-[100px]"></TableHead>
+                    <TableHead className="bg-background">Sales No</TableHead>
+                    <TableHead className="bg-background">Date</TableHead>
+                    <TableHead className="bg-background">Customer</TableHead>
+                    <TableHead className="bg-background">Employee</TableHead>
+                    <TableHead className="bg-background">Product</TableHead>
+                    <TableHead className="bg-background">Quantity</TableHead>
+                    <TableHead className="bg-background">Unit Price</TableHead>
+                    <TableHead className="bg-background">Current Price</TableHead>
+                    <TableHead className="bg-background">Amount</TableHead>
+                    <TableHead className="bg-background w-[100px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -944,7 +962,6 @@ const Sales: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* New Sale Dialog */}
       <Dialog open={isNewSaleDialogOpen} onOpenChange={setIsNewSaleDialogOpen}>
         <DialogContent className="sm:max-w-[800px]">
           <DialogHeader>
@@ -1189,7 +1206,6 @@ const Sales: React.FC = () => {
         </DialogContent>
       </Dialog>
       
-      {/* Edit Sale Dialog */}
       <Dialog open={isEditSaleDialogOpen} onOpenChange={setIsEditSaleDialogOpen}>
         <DialogContent className="sm:max-w-[800px]">
           <DialogHeader>
