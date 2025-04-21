@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -248,6 +247,13 @@ const Sales: React.FC = () => {
             };
           });
 
+          // Sort the formatted sales by TR number ascending (parse int after "TR" and sort numerically)
+          formattedSales.sort((a, b) => {
+            const aNum = parseInt(a.saleNumber.replace('TR', ''), 10) || 0;
+            const bNum = parseInt(b.saleNumber.replace('TR', ''), 10) || 0;
+            return aNum - bNum;
+          });
+
           setSalesData(formattedSales);
         }
       } catch (error) {
@@ -493,7 +499,6 @@ const Sales: React.FC = () => {
       
       setCurrentEditingSale(id);
       
-      // Fix the TypeScript error by using the correct method
       const { data: saleDetail, error: saleDetailError } = await supabase
         .from('sales')
         .select('custno, empno, salesdate')
@@ -674,7 +679,6 @@ const Sales: React.FC = () => {
     try {
       setSavingOrder(true);
       
-      // Update the sales record
       const { error: updateSaleError } = await supabase
         .from('sales')
         .update({
@@ -688,7 +692,6 @@ const Sales: React.FC = () => {
         throw new Error(`Error updating sale: ${updateSaleError.message}`);
       }
       
-      // Delete existing sales details
       const { error: deleteSaleDetailsError } = await supabase
         .from('salesdetail')
         .delete()
@@ -698,7 +701,6 @@ const Sales: React.FC = () => {
         throw new Error(`Error removing existing details: ${deleteSaleDetailsError.message}`);
       }
       
-      // Add new sales details
       for (const item of editSale.items) {
         const { error: detailError } = await supabase
           .from('salesdetail')
@@ -713,7 +715,6 @@ const Sales: React.FC = () => {
         }
       }
       
-      // Update the UI with the edited sale information
       setSalesData(prev => {
         const updatedSales = prev.filter(sale => sale.id !== editSale.id);
         const updatedSale = {
@@ -888,96 +889,93 @@ const Sales: React.FC = () => {
           <CardDescription>Manage and view all sales transactions</CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[600px] w-full rounded-md border">
-            <div className="relative">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
+          <div className="relative w-full" style={{ maxHeight: 600, overflowY: 'auto' }}>
+            <Table>
+              <TableHeader className="sticky top-0 z-20 bg-background shadow-md">
+                <TableRow>
+                  <TableHead className="bg-background">Sales No</TableHead>
+                  <TableHead className="bg-background">Date</TableHead>
+                  <TableHead className="bg-background">Customer</TableHead>
+                  <TableHead className="bg-background">Employee</TableHead>
+                  <TableHead className="bg-background">Product</TableHead>
+                  <TableHead className="bg-background">Quantity</TableHead>
+                  <TableHead className="bg-background">Unit Price</TableHead>
+                  <TableHead className="bg-background">Current Price</TableHead>
+                  <TableHead className="bg-background">Amount</TableHead>
+                  <TableHead className="bg-background w-[100px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
                   <TableRow>
-                    <TableHead className="bg-background">Sales No</TableHead>
-                    <TableHead className="bg-background">Date</TableHead>
-                    <TableHead className="bg-background">Customer</TableHead>
-                    <TableHead className="bg-background">Employee</TableHead>
-                    <TableHead className="bg-background">Product</TableHead>
-                    <TableHead className="bg-background">Quantity</TableHead>
-                    <TableHead className="bg-background">Unit Price</TableHead>
-                    <TableHead className="bg-background">Current Price</TableHead>
-                    <TableHead className="bg-background">Amount</TableHead>
-                    <TableHead className="bg-background w-[100px]"></TableHead>
+                    <TableCell colSpan={10} className="text-center">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={10} className="text-center">
-                        <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                ) : salesData.map((sale) => (
+                  <React.Fragment key={sale.id}>
+                    {sale.products.map((product, idx) => (
+                      <TableRow key={`${sale.id}-${idx}`}>
+                        {idx === 0 ? (
+                          <>
+                            <TableCell>{sale.saleNumber}</TableCell>
+                            <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
+                            <TableCell>{sale.customer}</TableCell>
+                            <TableCell>{sale.employee}</TableCell>
+                          </>
+                        ) : (
+                          <>
+                            <TableCell></TableCell>
+                            <TableCell></TableCell>
+                            <TableCell></TableCell>
+                            <TableCell></TableCell>
+                          </>
+                        )}
+                        <TableCell>{product.product}</TableCell>
+                        <TableCell>{product.quantity}</TableCell>
+                        <TableCell>{formatCurrency(product.unitPrice)}</TableCell>
+                        <TableCell>{formatCurrency(product.currentPrice)}</TableCell>
+                        <TableCell>{formatCurrency(product.amount)}</TableCell>
+                        {idx === 0 ? (
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => handleEditSale(sale.id)}
+                              >
+                                <Pencil className="h-4 w-4 text-blue-500" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => handleDeleteSale(sale.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        ) : (
+                          <TableCell></TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-muted/50">
+                      <TableCell colSpan={8} className="text-right font-bold">
+                        Total Amount:
+                      </TableCell>
+                      <TableCell colSpan={2} className="font-bold">
+                        {formatCurrency(sale.totalAmount)}
                       </TableCell>
                     </TableRow>
-                  ) : salesData.map((sale) => (
-                    <React.Fragment key={sale.id}>
-                      {sale.products.map((product, idx) => (
-                        <TableRow key={`${sale.id}-${idx}`}>
-                          {idx === 0 ? (
-                            <>
-                              <TableCell>{sale.saleNumber}</TableCell>
-                              <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
-                              <TableCell>{sale.customer}</TableCell>
-                              <TableCell>{sale.employee}</TableCell>
-                            </>
-                          ) : (
-                            <>
-                              <TableCell></TableCell>
-                              <TableCell></TableCell>
-                              <TableCell></TableCell>
-                              <TableCell></TableCell>
-                            </>
-                          )}
-                          <TableCell>{product.product}</TableCell>
-                          <TableCell>{product.quantity}</TableCell>
-                          <TableCell>{formatCurrency(product.unitPrice)}</TableCell>
-                          <TableCell>{formatCurrency(product.currentPrice)}</TableCell>
-                          <TableCell>{formatCurrency(product.amount)}</TableCell>
-                          {idx === 0 ? (
-                            <TableCell>
-                              <div className="flex gap-2">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon"
-                                  onClick={() => handleEditSale(sale.id)}
-                                >
-                                  <Pencil className="h-4 w-4 text-blue-500" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon"
-                                  onClick={() => handleDeleteSale(sale.id)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-500" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          ) : (
-                            <TableCell></TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                      <TableRow className="bg-muted/50">
-                        <TableCell colSpan={8} className="text-right font-bold">
-                          Total Amount:
-                        </TableCell>
-                        <TableCell colSpan={2} className="font-bold">
-                          {formatCurrency(sale.totalAmount)}
-                        </TableCell>
-                      </TableRow>
-                    </React.Fragment>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </ScrollArea>
+                  </React.Fragment>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      {/* New Sale Dialog */}
       <Dialog open={isNewSaleDialogOpen} onOpenChange={setIsNewSaleDialogOpen}>
         <DialogContent className="sm:max-w-[800px]">
           <DialogHeader>
@@ -1222,7 +1220,6 @@ const Sales: React.FC = () => {
         </DialogContent>
       </Dialog>
       
-      {/* Edit Sale Dialog */}
       <Dialog open={isEditSaleDialogOpen} onOpenChange={setIsEditSaleDialogOpen}>
         <DialogContent className="sm:max-w-[800px]">
           <DialogHeader>
