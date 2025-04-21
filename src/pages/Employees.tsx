@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { 
+import {
   Table,
   TableBody,
   TableCell,
@@ -10,15 +11,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
 import { PlusIcon } from 'lucide-react';
+import { Edit, Trash2 } from "lucide-react";
+import { EmployeeDialog } from "@/components/EmployeeDialog";
 
-// Updated employee data structure
-const employees = [
+// Initial employee data for demonstration
+const initialEmployees = [
   {
     id: "1",
     empId: "EMP001",
@@ -33,7 +32,6 @@ const employees = [
     name: "Sarah Johnson",
     position: "Sales Representative",
     department: "Sales",
-    email: "sarah.johnson@example.com",
     hireDate: "2021-02-18"
   },
   {
@@ -42,7 +40,6 @@ const employees = [
     name: "Michael Brown",
     position: "Sales Representative",
     department: "Marketing",
-    email: "michael.brown@example.com",
     hireDate: "2019-11-03"
   },
   {
@@ -51,7 +48,6 @@ const employees = [
     name: "Emily Davis",
     position: "Sales Assistant",
     department: "Customer Support",
-    email: "emily.davis@example.com",
     hireDate: "2022-01-10"
   },
   {
@@ -60,184 +56,137 @@ const employees = [
     name: "David Wilson",
     position: "Regional Sales Manager",
     department: "Executive",
-    email: "david.wilson@example.com",
     hireDate: "2018-07-22"
   }
 ];
 
 const Employees: React.FC = () => {
   const { toast } = useToast();
-  const [isAddEmployeeDialogOpen, setIsAddEmployeeDialogOpen] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({
-    name: "",
-    empId: "EMP" + Math.floor(1000 + Math.random() * 9000),
-    position: "",
-    department: "Sales",
-    hireDate: new Date().toISOString().split('T')[0]
-  });
-  
-  const handleAddEmployeeOpen = () => {
-    setIsAddEmployeeDialogOpen(true);
-  };
-  
-  const handleAddEmployeeClose = () => {
-    setIsAddEmployeeDialogOpen(false);
-    setNewEmployee({
-      name: "",
-      empId: "EMP" + Math.floor(1000 + Math.random() * 9000),
-      position: "",
-      department: "Sales",
-      hireDate: new Date().toISOString().split('T')[0]
-    });
-  };
-  
-  const handleAddEmployeeSubmit = () => {
+  const [employees, setEmployees] = useState(initialEmployees);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
+
+  // Function to sort employees by empId as TR0001...TR9xxx (ascending)
+  const sortedEmployees = [...employees].sort((a, b) =>
+    a.empId.localeCompare(b.empId, undefined, { numeric: true, sensitivity: "base" })
+  );
+
+  // Add
+  const handleAdd = (data: any) => {
+    setEmployees(prev => [...prev, { ...data, id: String(Date.now()) }]);
+    setIsAddDialogOpen(false);
     toast({
       title: "Employee added",
-      description: `${newEmployee.name} has been added to the system.`,
+      description: `${data.name} has been added to the system.`,
     });
-    handleAddEmployeeClose();
+  };
+
+  // Edit
+  const handleEditClick = (employee: any) => {
+    setSelectedEmployee(employee);
+    setIsEditDialogOpen(true);
+  };
+  const handleEdit = (data: any) => {
+    setEmployees(prev => prev.map(e => (e.id === selectedEmployee.id ? { ...e, ...data } : e)));
+    setIsEditDialogOpen(false);
+    setSelectedEmployee(null);
+    toast({
+      title: "Employee updated",
+      description: `${data.name}'s information has been updated.`,
+    });
+  };
+
+  // Delete
+  const handleDelete = (id: string) => {
+    setEmployees(prev => prev.filter(e => e.id !== id));
+    toast({
+      title: "Employee deleted",
+      description: `Employee has been removed from the system.`,
+    });
   };
 
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">Employees</h2>
-        <Button onClick={handleAddEmployeeOpen}>
+        <Button onClick={() => setIsAddDialogOpen(true)}>
           <PlusIcon className="mr-2 h-4 w-4" /> Add Employee
         </Button>
       </div>
-      
+
       <Card>
         <CardHeader>
           <CardTitle>Employee Directory</CardTitle>
           <CardDescription>Manage and view all employees in your organization</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Employee ID</TableHead>
-                <TableHead>Employee</TableHead>
-                <TableHead>Position</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Hire Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {employees.map((employee) => (
-                <TableRow key={employee.id}>
-                  <TableCell>{employee.empId}</TableCell>
-                  <TableCell className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarFallback>
-                        {employee.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="font-medium">{employee.name}</div>
-                  </TableCell>
-                  <TableCell>{employee.position}</TableCell>
-                  <TableCell>{employee.department}</TableCell>
-                  <TableCell>{new Date(employee.hireDate).toLocaleDateString()}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm">View</Button>
-                  </TableCell>
+          <div className="overflow-x-auto max-h-[450px] border rounded-lg">
+            <Table>
+              {/* Fixed header with sticky CSS */}
+              <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableRow>
+                  <TableHead className="bg-background sticky top-0 z-20">Employee ID</TableHead>
+                  <TableHead className="bg-background sticky top-0 z-20">Employee</TableHead>
+                  <TableHead className="bg-background sticky top-0 z-20">Position</TableHead>
+                  <TableHead className="bg-background sticky top-0 z-20">Department</TableHead>
+                  <TableHead className="bg-background sticky top-0 z-20">Hire Date</TableHead>
+                  <TableHead className="text-right bg-background sticky top-0 z-20">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {sortedEmployees.map((employee) => (
+                  <TableRow key={employee.id}>
+                    <TableCell>{employee.empId}</TableCell>
+                    <TableCell className="flex items-center gap-3">
+                      <Avatar>
+                        <AvatarFallback>
+                          {employee.name.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="font-medium">{employee.name}</div>
+                    </TableCell>
+                    <TableCell>{employee.position}</TableCell>
+                    <TableCell>{employee.department}</TableCell>
+                    <TableCell>{new Date(employee.hireDate).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-right flex gap-2 justify-end">
+                      <Button variant="outline" size="sm" onClick={() => handleEditClick(employee)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDelete(employee.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      <Dialog open={isAddEmployeeDialogOpen} onOpenChange={setIsAddEmployeeDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add New Employee</DialogTitle>
-            <DialogDescription>
-              Enter the details for the new employee.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="empId" className="text-right">
-                Employee ID
-              </Label>
-              <Input
-                id="empId"
-                value={newEmployee.empId}
-                onChange={(e) => setNewEmployee({...newEmployee, empId: e.target.value})}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Full Name
-              </Label>
-              <Input
-                id="name"
-                value={newEmployee.name}
-                onChange={(e) => setNewEmployee({...newEmployee, name: e.target.value})}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="position" className="text-right">
-                Position
-              </Label>
-              <Select 
-                onValueChange={(value) => setNewEmployee({...newEmployee, position: value})}
-                value={newEmployee.position}
-              >
-                <SelectTrigger id="position" className="col-span-3">
-                  <SelectValue placeholder="Select position" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Sales Manager">Sales Manager</SelectItem>
-                  <SelectItem value="Sales Representative">Sales Representative</SelectItem>
-                  <SelectItem value="Sales Assistant">Sales Assistant</SelectItem>
-                  <SelectItem value="Regional Sales Manager">Regional Sales Manager</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="department" className="text-right">
-                Department
-              </Label>
-              <Select 
-                onValueChange={(value) => setNewEmployee({...newEmployee, department: value})}
-                value={newEmployee.department}
-              >
-                <SelectTrigger id="department" className="col-span-3">
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Sales">Sales</SelectItem>
-                  <SelectItem value="Marketing">Marketing</SelectItem>
-                  <SelectItem value="Executive">Executive</SelectItem>
-                  <SelectItem value="Customer Support">Customer Support</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="hireDate" className="text-right">
-                Hire Date
-              </Label>
-              <Input
-                id="hireDate"
-                type="date"
-                value={newEmployee.hireDate}
-                onChange={(e) => setNewEmployee({...newEmployee, hireDate: e.target.value})}
-                className="col-span-3"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleAddEmployeeClose}>Cancel</Button>
-            <Button onClick={handleAddEmployeeSubmit}>Add Employee</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Add Employee Dialog */}
+      <EmployeeDialog
+        open={isAddDialogOpen}
+        mode="add"
+        onClose={() => setIsAddDialogOpen(false)}
+        onSave={handleAdd}
+      />
+      {/* Edit Employee Dialog */}
+      <EmployeeDialog
+        open={isEditDialogOpen}
+        mode="edit"
+        employee={selectedEmployee}
+        onClose={() => {
+          setIsEditDialogOpen(false);
+          setSelectedEmployee(null);
+        }}
+        onSave={handleEdit}
+      />
     </div>
   );
 };
