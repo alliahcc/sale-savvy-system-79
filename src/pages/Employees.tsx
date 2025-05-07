@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -15,66 +15,74 @@ import { useToast } from '@/hooks/use-toast';
 import { PlusIcon } from 'lucide-react';
 import { Edit, Trash2 } from "lucide-react";
 import { EmployeeDialog } from "@/components/EmployeeDialog";
+import { supabase } from "@/integrations/supabase/client";
 
-// Initial employee data for demonstration
-const initialEmployees = [
-  {
-    id: "1",
-    empId: "EMP001",
-    name: "John Smith",
-    position: "Sales Manager",
-    department: "Sales",
-    hireDate: "2020-05-12"
-  },
-  {
-    id: "2",
-    empId: "EMP002",
-    name: "Sarah Johnson",
-    position: "Sales Representative",
-    department: "Sales",
-    hireDate: "2021-02-18"
-  },
-  {
-    id: "3",
-    empId: "EMP003",
-    name: "Michael Brown",
-    position: "Sales Representative",
-    department: "Marketing",
-    hireDate: "2019-11-03"
-  },
-  {
-    id: "4",
-    empId: "EMP004",
-    name: "Emily Davis",
-    position: "Sales Assistant",
-    department: "Customer Support",
-    hireDate: "2022-01-10"
-  },
-  {
-    id: "5",
-    empId: "EMP005",
-    name: "David Wilson",
-    position: "Regional Sales Manager",
-    department: "Executive",
-    hireDate: "2018-07-22"
-  }
-];
+interface Employee {
+  id: string;
+  empId: string;
+  name: string;
+  position: string;
+  department: string;
+  hireDate: string;
+}
 
 const Employees: React.FC = () => {
   const { toast } = useToast();
-  const [employees, setEmployees] = useState(initialEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
-  // Function to sort employees by empId as TR0001...TR9xxx (ascending)
+  // Fetch employees from Supabase
+  useEffect(() => {
+    async function fetchEmployees() {
+      try {
+        setIsLoading(true);
+        const { data: employeeData, error } = await supabase
+          .from('employee')
+          .select('*');
+
+        if (error) {
+          console.error('Error fetching employees:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load employees. Please try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Transform the data to match our Employee interface
+        const formattedEmployees = employeeData.map(emp => ({
+          id: emp.empno,
+          empId: emp.empno,
+          name: `${emp.firstname || ''} ${emp.lastname || ''}`.trim(),
+          position: "Sales Representative", // Default position if not available
+          department: "Sales", // Default department if not available
+          hireDate: emp.hiredate || new Date().toISOString().split("T")[0],
+        }));
+
+        setEmployees(formattedEmployees);
+      } catch (error) {
+        console.error('Error:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchEmployees();
+  }, [toast]);
+
+  // Function to sort employees by empId
   const sortedEmployees = [...employees].sort((a, b) =>
     a.empId.localeCompare(b.empId, undefined, { numeric: true, sensitivity: "base" })
   );
 
   // Add
   const handleAdd = (data: any) => {
-    setEmployees(prev => [...prev, { ...data, id: String(Date.now()) }]);
+    // This would need to be updated to actually save to Supabase
+    setEmployees(prev => [...prev, { ...data, id: String(data.empId) }]);
     setIsAddDialogOpen(false);
     toast({
       title: "Employee added",
@@ -88,7 +96,8 @@ const Employees: React.FC = () => {
     setIsEditDialogOpen(true);
   };
   const handleEdit = (data: any) => {
-    setEmployees(prev => prev.map(e => (e.id === selectedEmployee.id ? { ...e, ...data } : e)));
+    // This would need to be updated to actually save to Supabase
+    setEmployees(prev => prev.map(e => (e.id === selectedEmployee?.id ? { ...e, ...data } : e)));
     setIsEditDialogOpen(false);
     setSelectedEmployee(null);
     toast({
@@ -99,6 +108,7 @@ const Employees: React.FC = () => {
 
   // Delete
   const handleDelete = (id: string) => {
+    // This would need to be updated to actually delete from Supabase
     setEmployees(prev => prev.filter(e => e.id !== id));
     toast({
       title: "Employee deleted",
@@ -135,34 +145,48 @@ const Employees: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedEmployees.map((employee) => (
-                  <TableRow key={employee.id}>
-                    <TableCell>{employee.empId}</TableCell>
-                    <TableCell className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback>
-                          {employee.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="font-medium">{employee.name}</div>
-                    </TableCell>
-                    <TableCell>{employee.position}</TableCell>
-                    <TableCell>{employee.department}</TableCell>
-                    <TableCell>{new Date(employee.hireDate).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-right flex gap-2 justify-end">
-                      <Button variant="outline" size="sm" onClick={() => handleEditClick(employee)}>
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(employee.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-10">
+                      Loading employees...
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : sortedEmployees.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-10">
+                      No employees found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  sortedEmployees.map((employee) => (
+                    <TableRow key={employee.id}>
+                      <TableCell>{employee.empId}</TableCell>
+                      <TableCell className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarFallback>
+                            {employee.name.split(' ').map(n => n[0]).join('')}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="font-medium">{employee.name}</div>
+                      </TableCell>
+                      <TableCell>{employee.position}</TableCell>
+                      <TableCell>{employee.department}</TableCell>
+                      <TableCell>{new Date(employee.hireDate).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right flex gap-2 justify-end">
+                        <Button variant="outline" size="sm" onClick={() => handleEditClick(employee)}>
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(employee.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
