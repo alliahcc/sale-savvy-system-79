@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -141,7 +140,7 @@ const Employees: React.FC = () => {
                   <TableHead className="bg-background sticky top-0 z-20">Position</TableHead>
                   <TableHead className="bg-background sticky top-0 z-20">Department</TableHead>
                   <TableHead className="bg-background sticky top-0 z-20">Hire Date</TableHead>
-                  <TableHead className="text-right bg-background sticky top-0 z-20">Actions</TableHead>
+                  <TableHead className="text-right bg-background sticky top-0 z-20"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

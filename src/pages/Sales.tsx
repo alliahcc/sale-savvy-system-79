@@ -247,14 +247,19 @@ const Sales: React.FC = () => {
             };
           });
 
-          // Sort the formatted sales by TR number ascending (parse int after "TR" and sort numerically)
-          formattedSales.sort((a, b) => {
+          // Filter out empty sales with no products or zero total amount
+          const filteredSales = formattedSales.filter(sale => 
+            sale.products.length > 0 && sale.totalAmount > 0
+          );
+
+          // Sort by TR number in ascending order
+          filteredSales.sort((a, b) => {
             const aNum = parseInt(a.saleNumber.replace('TR', ''), 10) || 0;
             const bNum = parseInt(b.saleNumber.replace('TR', ''), 10) || 0;
             return aNum - bNum;
           });
 
-          setSalesData(formattedSales);
+          setSalesData(filteredSales);
         }
       } catch (error) {
         console.error('Error fetching sales data:', error);
@@ -859,7 +864,15 @@ const Sales: React.FC = () => {
         totalAmount: newSale.totalAmount
       };
       
-      setSalesData(prev => [newSaleItem, ...prev]);
+      // Add to beginning of array and re-sort by TR number ascending
+      setSalesData(prev => {
+        const newArray = [newSaleItem, ...prev];
+        return newArray.sort((a, b) => {
+          const aNum = parseInt(a.saleNumber.replace('TR', ''), 10) || 0;
+          const bNum = parseInt(b.saleNumber.replace('TR', ''), 10) || 0;
+          return aNum - bNum;
+        });
+      });
       
       handleNewSaleClose();
     } catch (error) {
