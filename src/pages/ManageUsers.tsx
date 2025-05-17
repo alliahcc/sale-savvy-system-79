@@ -21,20 +21,40 @@ import { Button } from "@/components/ui/button";
 import { ChevronDown, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
+interface UserPermissions {
+  editSales: boolean;
+  editSalesDetail: boolean;
+  newSale: boolean;
+  deleteSale: boolean;
+  viewEmployees: boolean;
+  editEmployees: boolean;
+}
+
+interface UserProfile {
+  avatar_url: string | null;
+  created_at: string;
+  full_name: string | null;
+  id: string;
+  updated_at: string;
+  permissions?: UserPermissions;
+}
+
 interface User {
   id: string;
   email: string;
   username: string;
   isAdmin: boolean;
-  permissions: {
-    editSales: boolean;
-    editSalesDetail: boolean;
-    newSale: boolean;
-    deleteSale: boolean;
-    viewEmployees: boolean;
-    editEmployees: boolean;
-  };
+  permissions: UserPermissions;
 }
+
+const DEFAULT_PERMISSIONS: UserPermissions = {
+  editSales: false,
+  editSalesDetail: false,
+  newSale: false,
+  deleteSale: false,
+  viewEmployees: true,
+  editEmployees: false
+};
 
 const ManageUsers: React.FC = () => {
   const { toast } = useToast();
@@ -65,27 +85,29 @@ const ManageUsers: React.FC = () => {
             throw error;
           }
           
-          // Get permissions from profiles table (or create default)
+          // Get profiles from profiles table
           const { data: profilesData } = await supabase
             .from('profiles')
             .select('*');
           
+          // Map users with their profiles and permissions
           const mappedUsers = userData.users.map(authUser => {
-            const profile = profilesData?.find(p => p.id === authUser.id);
+            const profile = profilesData?.find(p => p.id === authUser.id) as UserProfile | undefined;
+            
+            // Initialize permissions
+            let permissions = DEFAULT_PERMISSIONS;
+            
+            // If profile exists and has permissions, use those
+            if (profile && profile.permissions) {
+              permissions = profile.permissions;
+            }
             
             return {
               id: authUser.id,
               email: authUser.email || '',
               username: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Unknown',
               isAdmin: authUser.email === "alliahalexis.cinco@neu.edu.ph",
-              permissions: profile?.permissions || {
-                editSales: false,
-                editSalesDetail: false,
-                newSale: false,
-                deleteSale: false,
-                viewEmployees: true,
-                editEmployees: false
-              }
+              permissions: permissions
             };
           });
           
@@ -127,13 +149,24 @@ const ManageUsers: React.FC = () => {
         [permission]: value
       };
 
+      // First, check if the profile exists
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
       // Update the permissions in Supabase
       const { error } = await supabase
         .from('profiles')
         .upsert({
           id: userId,
           permissions: updatedPermissions,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          // Preserve existing data if it exists
+          full_name: existingProfile?.full_name || userToUpdate.username,
+          avatar_url: existingProfile?.avatar_url || null,
+          created_at: existingProfile?.created_at || new Date().toISOString(),
         });
 
       if (error) {
@@ -293,3 +326,4 @@ const ManageUsers: React.FC = () => {
 };
 
 export default ManageUsers;
+
