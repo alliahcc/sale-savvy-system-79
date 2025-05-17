@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,10 +12,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from '@/hooks/use-toast';
-import { PlusIcon } from 'lucide-react';
+import { PlusIcon, Users } from 'lucide-react';
 import { Edit, Trash2 } from "lucide-react";
 import { EmployeeDialog } from "@/components/EmployeeDialog";
 import { supabase } from "@/integrations/supabase/client";
+import { Link } from 'react-router-dom';
 
 interface Employee {
   id: string;
@@ -32,6 +34,19 @@ const Employees: React.FC = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check if user is admin
+  useEffect(() => {
+    async function checkAdmin() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && user.email === "alliahalexis.cinco@neu.edu.ph") {
+        setIsAdmin(true);
+      }
+    }
+    
+    checkAdmin();
+  }, []);
 
   // Fetch employees from Supabase
   useEffect(() => {
@@ -119,9 +134,18 @@ const Employees: React.FC = () => {
     <div className="space-y-6 animate-fadeIn">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">Employees</h2>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <PlusIcon className="mr-2 h-4 w-4" /> Add Employee
-        </Button>
+        <div className="flex gap-2">
+          {isAdmin && (
+            <Button asChild variant="outline">
+              <Link to="/manage-users" className="flex items-center">
+                <Users className="mr-2 h-4 w-4" /> Manage Users
+              </Link>
+            </Button>
+          )}
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <PlusIcon className="mr-2 h-4 w-4" /> Add Employee
+          </Button>
+        </div>
       </div>
 
       <Card>

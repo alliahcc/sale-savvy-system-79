@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -7,11 +8,12 @@ import {
   LogOut, 
   Menu, 
   X,
-  TrendingUp
+  TrendingUp,
+  Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,12 +26,18 @@ const DashboardLayout: React.FC = () => {
   const isMobile = useIsMobile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   useEffect(() => {
     // Get current user
     const fetchUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
+      
+      // Check if user is admin
+      if (user && user.email === "alliahalexis.cinco@neu.edu.ph") {
+        setIsAdmin(true);
+      }
     };
     
     fetchUser();
@@ -41,6 +49,11 @@ const DashboardLayout: React.FC = () => {
           navigate('/');
         } else if (session) {
           setUser(session.user);
+          if (session.user.email === "alliahalexis.cinco@neu.edu.ph") {
+            setIsAdmin(true);
+          } else {
+            setIsAdmin(false);
+          }
         }
       }
     );
@@ -65,6 +78,15 @@ const DashboardLayout: React.FC = () => {
       icon: <Users className="h-5 w-5" />
     }
   ];
+
+  // Add Manage Users option if user is admin
+  if (isAdmin) {
+    navigationItems.push({
+      name: 'Manage Users',
+      path: '/manage-users',
+      icon: <Shield className="h-5 w-5" />
+    });
+  }
 
   const handleLogout = async () => {
     try {
