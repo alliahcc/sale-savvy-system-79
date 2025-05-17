@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -18,16 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, Shield } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-
-interface UserPermissions {
-  editSales: boolean;
-  editSalesDetail: boolean;
-  newSale: boolean;
-  deleteSale: boolean;
-  viewEmployees: boolean;
-  editEmployees: boolean;
-}
+import { supabase, EnhancedProfile, UserPermissions } from "@/integrations/supabase/client";
 
 // Update the UserProfile interface to include permissions
 interface UserProfile {
@@ -88,15 +80,7 @@ const ManageUsers: React.FC = () => {
           const isCurrentUserAdmin = user.email === "alliahalexis.cinco@neu.edu.ph";
           setIsAdmin(isCurrentUserAdmin);
           
-          // First, fetch all authenticated users
-          const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-          
-          if (authError) {
-            console.error("Error listing auth users:", authError);
-            throw authError;
-          }
-          
-          // Then, get all profiles from the profiles table
+          // Get all profiles from the profiles table (this will be our main data source)
           const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select('*');
@@ -105,53 +89,45 @@ const ManageUsers: React.FC = () => {
             console.error("Error fetching profiles:", profilesError);
             throw profilesError;
           }
-          
-          console.log("Auth users:", authUsers?.users);
+
           console.log("All profiles:", profilesData);
           
-          // Map users with their profiles and permissions
-          if (authUsers && authUsers.users && authUsers.users.length > 0) {
-            const mappedUsers = authUsers.users.map((authUser: any) => {
-              const typedAuthUser = authUser as unknown as AuthUserData;
-              // Find matching profile for this user
-              const profile = profilesData?.find(p => p.id === typedAuthUser.id) as UserProfile | undefined;
+          // Since we can't call admin.listUsers from the client, we'll work with profiles
+          if (profilesData && profilesData.length > 0) {
+            // Get current authenticated user details to at least have their email
+            const { data: currentUserData } = await supabase.auth.getUser();
+            const currentUserEmail = currentUserData?.user?.email;
+            const currentUserId = currentUserData?.user?.id;
+            
+            // Map profiles to our User interface
+            const mappedUsers = profilesData.map((profile: EnhancedProfile) => {
+              // For the current user, we know their email from auth
+              const isCurrentUser = profile.id === currentUserId;
               
-              // Get permissions from profile or use defaults
-              let permissions = DEFAULT_PERMISSIONS;
+              // Extract permissions or use defaults
+              const permissions = profile.permissions || DEFAULT_PERMISSIONS;
               
-              // If profile exists and has permissions, use those
-              if (profile && profile.permissions) {
-                permissions = profile.permissions;
-              }
+              // Determine if admin by email (for current user only, since we know their email)
+              const isUserAdmin = isCurrentUser && currentUserEmail === "alliahalexis.cinco@neu.edu.ph";
               
               return {
-                id: typedAuthUser.id,
-                email: typedAuthUser.email || '',
-                username: typedAuthUser.user_metadata?.full_name || 
-                         typedAuthUser.email?.split('@')[0] || 
-                         'Unknown',
-                isAdmin: typedAuthUser.email === "alliahalexis.cinco@neu.edu.ph",
+                id: profile.id,
+                // Use known email for current user, otherwise use placeholder
+                email: isCurrentUser ? currentUserEmail || profile.id : profile.email || profile.id,
+                username: profile.full_name || 'User',
+                isAdmin: isUserAdmin,
                 permissions: permissions
               };
             });
             
             setUsers(mappedUsers);
           } else {
-            // Fallback: If we can't get users from auth, use profiles
-            const mappedProfiles = profilesData?.map(profile => {
-              // Initialize permissions - use defaults if none exist
-              const permissions = (profile as any).permissions || DEFAULT_PERMISSIONS;
-              
-              return {
-                id: profile.id,
-                email: (profile as any).email || profile.id || '',
-                username: profile.full_name || 'User',
-                isAdmin: false, // Only know this from auth data
-                permissions: permissions
-              };
-            }) || [];
-            
-            setUsers(mappedProfiles);
+            // No profiles found
+            toast({
+              title: "No Users Found",
+              description: "No user profiles exist in the database.",
+              variant: "destructive",
+            });
           }
         }
       } catch (error) {
