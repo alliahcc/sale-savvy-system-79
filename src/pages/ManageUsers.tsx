@@ -78,43 +78,81 @@ const ManageUsers: React.FC = () => {
           const isCurrentUserAdmin = user.email === "alliahalexis.cinco@neu.edu.ph";
           setIsAdmin(isCurrentUserAdmin);
           
-          // Fetch all users
-          const { data: userData, error } = await supabase.auth.admin.listUsers();
-          
-          if (error) {
-            throw error;
+          // Get all users directly from the auth.users view
+          // This requires admin privileges in Supabase
+          const { data: allUsers, error: usersError } = await supabase
+            .from('users')
+            .select('*');
+            
+          if (usersError) {
+            console.error("Error fetching users:", usersError);
+            throw usersError;
           }
           
           // Get profiles from profiles table
-          const { data: profilesData } = await supabase
+          const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select('*');
           
-          // Map users with their profiles and permissions
-          const mappedUsers = userData.users.map(authUser => {
-            const profile = profilesData?.find(p => p.id === authUser.id) as UserProfile | undefined;
-            
-            // Initialize permissions
-            let permissions = DEFAULT_PERMISSIONS;
-            
-            // If profile exists and has permissions, use those
-            if (profile && profile.permissions) {
-              permissions = profile.permissions;
-            }
-            
-            return {
-              id: authUser.id,
-              email: authUser.email || '',
-              username: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Unknown',
-              isAdmin: authUser.email === "alliahalexis.cinco@neu.edu.ph",
-              permissions: permissions
-            };
-          });
+          if (profilesError) {
+            console.error("Error fetching profiles:", profilesError);
+            throw profilesError;
+          }
           
-          setUsers(mappedUsers);
+          console.log("All users:", allUsers);
+          console.log("All profiles:", profilesData);
+          
+          // Map users with their profiles and permissions
+          if (allUsers && allUsers.length > 0) {
+            const mappedUsers = allUsers.map(authUser => {
+              const profile = profilesData?.find(p => p.id === authUser.id) as UserProfile | undefined;
+              
+              // Initialize permissions
+              let permissions = DEFAULT_PERMISSIONS;
+              
+              // If profile exists and has permissions, use those
+              if (profile && profile.permissions) {
+                permissions = profile.permissions;
+              }
+              
+              return {
+                id: authUser.id,
+                email: authUser.email || '',
+                username: authUser.user_metadata?.full_name || 
+                         authUser.email?.split('@')[0] || 
+                         'Unknown',
+                isAdmin: authUser.email === "alliahalexis.cinco@neu.edu.ph",
+                permissions: permissions
+              };
+            });
+            
+            setUsers(mappedUsers);
+          } else {
+            // Fallback: If we can't access the users view directly,
+            // let's try to get all users by fetching profiles
+            const mappedProfiles = profilesData?.map(profile => {
+              const email = profile.email || '';
+              
+              // Initialize permissions
+              let permissions = DEFAULT_PERMISSIONS;
+              if (profile.permissions) {
+                permissions = profile.permissions;
+              }
+              
+              return {
+                id: profile.id,
+                email: email,
+                username: profile.full_name || email.split('@')[0] || 'Unknown',
+                isAdmin: email === "alliahalexis.cinco@neu.edu.ph",
+                permissions: permissions
+              };
+            }) || [];
+            
+            setUsers(mappedProfiles);
+          }
         }
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Error fetching users:', error);
         toast({
           title: "Error",
           description: "Failed to load users. Please try again.",
