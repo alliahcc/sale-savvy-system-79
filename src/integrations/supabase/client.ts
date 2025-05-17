@@ -10,3 +10,29 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // import { supabase } from "@/integrations/supabase/client";
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+// Add custom types for working with auth users
+export type AuthUser = {
+  id: string;
+  email?: string | null;
+  user_metadata?: {
+    full_name?: string;
+    [key: string]: any;
+  };
+};
+
+// Add custom type for user permissions
+export type UserPermissions = {
+  editSales: boolean;
+  editSalesDetail: boolean;
+  newSale: boolean;
+  deleteSale: boolean;
+  viewEmployees: boolean;
+  editEmployees: boolean;
+};
+
+// Enhanced Profile type that includes permissions
+export type EnhancedProfile = Database['public']['Tables']['profiles']['Row'] & {
+  permissions?: UserPermissions;
+  email?: string;
+};

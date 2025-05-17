@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -30,6 +29,7 @@ interface UserPermissions {
   editEmployees: boolean;
 }
 
+// Update the UserProfile interface to include permissions
 interface UserProfile {
   avatar_url: string | null;
   created_at: string;
@@ -37,7 +37,7 @@ interface UserProfile {
   id: string;
   updated_at: string;
   permissions?: UserPermissions;
-  email?: string;
+  email?: string; // Add email as optional
 }
 
 interface User {
@@ -88,8 +88,15 @@ const ManageUsers: React.FC = () => {
           const isCurrentUserAdmin = user.email === "alliahalexis.cinco@neu.edu.ph";
           setIsAdmin(isCurrentUserAdmin);
           
-          // We'll use auth.getUser() and listUsers() from the client side
-          // First, get all profiles from the profiles table
+          // First, fetch all authenticated users
+          const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+          
+          if (authError) {
+            console.error("Error listing auth users:", authError);
+            throw authError;
+          }
+          
+          // Then, get all profiles from the profiles table
           const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select('*');
@@ -99,24 +106,17 @@ const ManageUsers: React.FC = () => {
             throw profilesError;
           }
           
-          // Then fetch authenticated users via admin API
-          const { data, error } = await supabase.auth.admin.listUsers();
-          
-          if (error) {
-            console.error("Error listing users:", error);
-            throw error;
-          }
-          
-          console.log("Auth users:", data?.users);
+          console.log("Auth users:", authUsers?.users);
           console.log("All profiles:", profilesData);
           
           // Map users with their profiles and permissions
-          if (data && data.users && data.users.length > 0) {
-            const mappedUsers = data.users.map(authUser => {
+          if (authUsers && authUsers.users && authUsers.users.length > 0) {
+            const mappedUsers = authUsers.users.map((authUser: any) => {
               const typedAuthUser = authUser as unknown as AuthUserData;
+              // Find matching profile for this user
               const profile = profilesData?.find(p => p.id === typedAuthUser.id) as UserProfile | undefined;
               
-              // Initialize permissions
+              // Get permissions from profile or use defaults
               let permissions = DEFAULT_PERMISSIONS;
               
               // If profile exists and has permissions, use those
@@ -140,12 +140,11 @@ const ManageUsers: React.FC = () => {
             // Fallback: If we can't get users from auth, use profiles
             const mappedProfiles = profilesData?.map(profile => {
               // Initialize permissions - use defaults if none exist
-              const permissions = profile.permissions || DEFAULT_PERMISSIONS;
+              const permissions = (profile as any).permissions || DEFAULT_PERMISSIONS;
               
-              // Since profiles don't have email, we'll use id or placeholder
               return {
                 id: profile.id,
-                email: profile.email || profile.id || '',
+                email: (profile as any).email || profile.id || '',
                 username: profile.full_name || 'User',
                 isAdmin: false, // Only know this from auth data
                 permissions: permissions
