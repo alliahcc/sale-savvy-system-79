@@ -37,6 +37,7 @@ interface UserProfile {
   id: string;
   updated_at: string;
   permissions?: UserPermissions;
+  email?: string;
 }
 
 interface User {
@@ -45,6 +46,15 @@ interface User {
   username: string;
   isAdmin: boolean;
   permissions: UserPermissions;
+}
+
+interface AuthUserData {
+  id: string;
+  email: string | null;
+  user_metadata: {
+    full_name?: string;
+    [key: string]: any;
+  };
 }
 
 const DEFAULT_PERMISSIONS: UserPermissions = {
@@ -78,18 +88,8 @@ const ManageUsers: React.FC = () => {
           const isCurrentUserAdmin = user.email === "alliahalexis.cinco@neu.edu.ph";
           setIsAdmin(isCurrentUserAdmin);
           
-          // Get all users directly from the auth.users view
-          // This requires admin privileges in Supabase
-          const { data: allUsers, error: usersError } = await supabase
-            .from('users')
-            .select('*');
-            
-          if (usersError) {
-            console.error("Error fetching users:", usersError);
-            throw usersError;
-          }
-          
-          // Get profiles from profiles table
+          // We'll use auth.getUser() and listUsers() from the client side
+          // First, get all profiles from the profiles table
           const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select('*');
@@ -99,13 +99,22 @@ const ManageUsers: React.FC = () => {
             throw profilesError;
           }
           
-          console.log("All users:", allUsers);
+          // Then fetch authenticated users via admin API
+          const { data, error } = await supabase.auth.admin.listUsers();
+          
+          if (error) {
+            console.error("Error listing users:", error);
+            throw error;
+          }
+          
+          console.log("Auth users:", data?.users);
           console.log("All profiles:", profilesData);
           
           // Map users with their profiles and permissions
-          if (allUsers && allUsers.length > 0) {
-            const mappedUsers = allUsers.map(authUser => {
-              const profile = profilesData?.find(p => p.id === authUser.id) as UserProfile | undefined;
+          if (data && data.users && data.users.length > 0) {
+            const mappedUsers = data.users.map(authUser => {
+              const typedAuthUser = authUser as unknown as AuthUserData;
+              const profile = profilesData?.find(p => p.id === typedAuthUser.id) as UserProfile | undefined;
               
               // Initialize permissions
               let permissions = DEFAULT_PERMISSIONS;
@@ -116,34 +125,29 @@ const ManageUsers: React.FC = () => {
               }
               
               return {
-                id: authUser.id,
-                email: authUser.email || '',
-                username: authUser.user_metadata?.full_name || 
-                         authUser.email?.split('@')[0] || 
+                id: typedAuthUser.id,
+                email: typedAuthUser.email || '',
+                username: typedAuthUser.user_metadata?.full_name || 
+                         typedAuthUser.email?.split('@')[0] || 
                          'Unknown',
-                isAdmin: authUser.email === "alliahalexis.cinco@neu.edu.ph",
+                isAdmin: typedAuthUser.email === "alliahalexis.cinco@neu.edu.ph",
                 permissions: permissions
               };
             });
             
             setUsers(mappedUsers);
           } else {
-            // Fallback: If we can't access the users view directly,
-            // let's try to get all users by fetching profiles
+            // Fallback: If we can't get users from auth, use profiles
             const mappedProfiles = profilesData?.map(profile => {
-              const email = profile.email || '';
+              // Initialize permissions - use defaults if none exist
+              const permissions = profile.permissions || DEFAULT_PERMISSIONS;
               
-              // Initialize permissions
-              let permissions = DEFAULT_PERMISSIONS;
-              if (profile.permissions) {
-                permissions = profile.permissions;
-              }
-              
+              // Since profiles don't have email, we'll use id or placeholder
               return {
                 id: profile.id,
-                email: email,
-                username: profile.full_name || email.split('@')[0] || 'Unknown',
-                isAdmin: email === "alliahalexis.cinco@neu.edu.ph",
+                email: profile.email || profile.id || '',
+                username: profile.full_name || 'User',
+                isAdmin: false, // Only know this from auth data
                 permissions: permissions
               };
             }) || [];
