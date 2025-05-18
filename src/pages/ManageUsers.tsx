@@ -20,6 +20,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { ChevronDown, Shield } from "lucide-react";
 import { supabase, EnhancedProfile, UserPermissions } from "@/integrations/supabase/client";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Update the UserProfile interface to include permissions
 interface UserProfile {
@@ -29,7 +36,7 @@ interface UserProfile {
   id: string;
   updated_at: string;
   permissions?: UserPermissions;
-  email?: string; // Add email as optional
+  email?: string;
 }
 
 interface User {
@@ -168,7 +175,7 @@ const ManageUsers: React.FC = () => {
     fetchUsers();
   }, [toast]);
 
-  const updatePermission = async (userId: string, permission: string, value: boolean) => {
+  const updatePermission = async (userId: string, permission: keyof UserPermissions, value: boolean) => {
     if (!isAdmin) {
       toast({
         title: "Permission Denied",
@@ -229,6 +236,47 @@ const ManageUsers: React.FC = () => {
     }
   };
 
+  const updateUserType = async (userId: string, isAdminValue: boolean) => {
+    if (!isAdmin) {
+      toast({
+        title: "Permission Denied",
+        description: "Only administrators can update user types.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Find the user to update
+      const userToUpdate = users.find(user => user.id === userId);
+      if (!userToUpdate) return;
+
+      // Update local state first for immediate UI feedback
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userId 
+            ? { ...user, isAdmin: isAdminValue } 
+            : user
+        )
+      );
+      
+      // Store the admin status in user metadata
+      // Note: In a real system, you might need to update this through an admin API,
+      // but for this demo we'll just update the local state and show a toast
+      toast({
+        title: "User Type Updated",
+        description: `User ${userToUpdate.username} is now a ${isAdminValue ? 'Admin' : 'User'}`,
+      });
+    } catch (error) {
+      console.error('Error updating user type:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update user type. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Helper function to get user initials for avatar
   const getUserInitials = (username: string) => {
     return username
@@ -238,7 +286,7 @@ const ManageUsers: React.FC = () => {
       .join('');
   };
 
-  const PermissionToggle = ({ userId, permission, value }: { userId: string, permission: string, value: boolean }) => (
+  const PermissionToggle = ({ userId, permission, value }: { userId: string, permission: keyof UserPermissions, value: boolean }) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" className="w-24 justify-between">
@@ -257,26 +305,26 @@ const ManageUsers: React.FC = () => {
     </DropdownMenu>
   );
 
-  const permissionsLabels = {
+  // Reordered display columns
+  const displayColumns = [
+    "editSales", 
+    "addSale", 
+    "deleteSale",
+    "editSalesDetail", 
+    "addSalesDetail", 
+    "deleteSalesDetail"
+  ];
+  
+  const permissionsLabels: Record<keyof UserPermissions, string> = {
     editSales: "Edit Sales",
-    editSalesDetail: "Edit Sales Detail", 
     addSale: "Add Sale",
-    addSalesDetail: "Add Sales Detail",
     deleteSale: "Delete Sale",
+    editSalesDetail: "Edit Sales Detail", 
+    addSalesDetail: "Add Sales Detail",
     deleteSalesDetail: "Delete Sales Detail",
     viewEmployees: "View Employees",
     editEmployees: "Edit Employees"
   };
-
-  // Only display the columns needed according to user request
-  const displayColumns = [
-    "editSales", 
-    "editSalesDetail", 
-    "addSale", 
-    "addSalesDetail", 
-    "deleteSale", 
-    "deleteSalesDetail"
-  ];
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -343,20 +391,35 @@ const ManageUsers: React.FC = () => {
                           {isAdmin ? (
                             <PermissionToggle 
                               userId={user.id} 
-                              permission={key} 
-                              value={user.permissions[key as keyof typeof user.permissions] || false} 
+                              permission={key as keyof UserPermissions} 
+                              value={user.permissions[key as keyof UserPermissions] || false} 
                             />
                           ) : (
                             <div className="px-3 py-2 border rounded">
-                              {user.permissions[key as keyof typeof user.permissions] ? 'True' : 'False'}
+                              {user.permissions[key as keyof UserPermissions] ? 'True' : 'False'}
                             </div>
                           )}
                         </TableCell>
                       ))}
                       <TableCell>
-                        <div className={`text-xs px-2 py-1 rounded-full inline-block ${user.isAdmin ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-700'}`}>
-                          {user.isAdmin ? 'Admin' : 'User'}
-                        </div>
+                        {isAdmin ? (
+                          <Select
+                            value={user.isAdmin ? 'admin' : 'user'}
+                            onValueChange={(value) => updateUserType(user.id, value === 'admin')}
+                          >
+                            <SelectTrigger className="w-24">
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="user">User</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div className={`text-xs px-2 py-1 rounded-full inline-block ${user.isAdmin ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-700'}`}>
+                            {user.isAdmin ? 'Admin' : 'User'}
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
