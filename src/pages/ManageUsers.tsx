@@ -38,15 +38,7 @@ interface User {
   username: string;
   isAdmin: boolean;
   permissions: UserPermissions;
-}
-
-interface AuthUserData {
-  id: string;
-  email: string | null;
-  user_metadata: {
-    full_name?: string;
-    [key: string]: any;
-  };
+  index: number; // Add index for sequential numbering
 }
 
 const DEFAULT_PERMISSIONS: UserPermissions = {
@@ -80,54 +72,86 @@ const ManageUsers: React.FC = () => {
           const isCurrentUserAdmin = user.email === "alliahalexis.cinco@neu.edu.ph";
           setIsAdmin(isCurrentUserAdmin);
           
-          // Get all profiles from the profiles table (this will be our main data source)
-          const { data: profilesData, error: profilesError } = await supabase
-            .from('profiles')
-            .select('*');
+          // Fetch all users from Auth API
+          const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
           
-          if (profilesError) {
-            console.error("Error fetching profiles:", profilesError);
-            throw profilesError;
-          }
-
-          console.log("All profiles:", profilesData);
-          
-          // Since we can't call admin.listUsers from the client, we'll work with profiles
-          if (profilesData && profilesData.length > 0) {
-            // Get current authenticated user details to at least have their email
-            const { data: currentUserData } = await supabase.auth.getUser();
-            const currentUserEmail = currentUserData?.user?.email;
-            const currentUserId = currentUserData?.user?.id;
+          if (authError) {
+            console.error("Error fetching auth users:", authError);
+            // If we can't fetch from admin API, fall back to profiles table
+            const { data: profilesData, error: profilesError } = await supabase
+              .from('profiles')
+              .select('*');
             
-            // Map profiles to our User interface
-            const mappedUsers = profilesData.map((profile: EnhancedProfile) => {
-              // For the current user, we know their email from auth
-              const isCurrentUser = profile.id === currentUserId;
+            if (profilesError) {
+              console.error("Error fetching profiles:", profilesError);
+              throw profilesError;
+            }
+            
+            // Map profiles to users
+            if (profilesData && profilesData.length > 0) {
+              const mappedUsers = profilesData.map((profile: EnhancedProfile, index: number) => {
+                // For the current user, we know their email from auth
+                const isCurrentUser = profile.id === currentUserId;
+                
+                // Extract permissions or use defaults
+                const permissions = profile.permissions || DEFAULT_PERMISSIONS;
+                
+                // Determine if admin by email (for current user only, since we know their email)
+                const isUserAdmin = isCurrentUser && user.email === "alliahalexis.cinco@neu.edu.ph";
+                
+                return {
+                  id: profile.id,
+                  // Use known email for current user, otherwise use placeholder or stored email
+                  email: isCurrentUser ? user.email || profile.id : profile.email || profile.id,
+                  username: profile.full_name || 'User',
+                  isAdmin: isUserAdmin,
+                  permissions: permissions,
+                  index: index + 1 // Add 1-based indexing
+                };
+              });
               
-              // Extract permissions or use defaults
-              const permissions = profile.permissions || DEFAULT_PERMISSIONS;
+              setUsers(mappedUsers);
+            } else {
+              // No profiles found
+              toast({
+                title: "No Users Found",
+                description: "No user profiles exist in the database.",
+                variant: "destructive",
+              });
+            }
+          } else if (authUsers && authUsers.users) {
+            // We got auth users, now let's get their profiles for additional data
+            const userIds = authUsers.users.map(user => user.id);
+            
+            // Fetch profiles for these users
+            const { data: profilesData } = await supabase
+              .from('profiles')
+              .select('*')
+              .in('id', userIds);
               
-              // Determine if admin by email (for current user only, since we know their email)
-              const isUserAdmin = isCurrentUser && currentUserEmail === "alliahalexis.cinco@neu.edu.ph";
+            // Create a map of profiles by user ID for quick lookup
+            const profilesMap = new Map();
+            if (profilesData) {
+              profilesData.forEach((profile: EnhancedProfile) => {
+                profilesMap.set(profile.id, profile);
+              });
+            }
+            
+            // Map auth users to our format, enriched with profile data
+            const mappedUsers = authUsers.users.map((authUser, index) => {
+              const profile = profilesMap.get(authUser.id) as EnhancedProfile | undefined;
               
               return {
-                id: profile.id,
-                // Use known email for current user, otherwise use placeholder
-                email: isCurrentUser ? currentUserEmail || profile.id : profile.email || profile.id,
-                username: profile.full_name || 'User',
-                isAdmin: isUserAdmin,
-                permissions: permissions
+                id: authUser.id,
+                email: authUser.email || 'No email',
+                username: profile?.full_name || authUser.user_metadata?.full_name || 'User',
+                isAdmin: authUser.email === "alliahalexis.cinco@neu.edu.ph",
+                permissions: profile?.permissions || DEFAULT_PERMISSIONS,
+                index: index + 1 // Add 1-based indexing
               };
             });
             
             setUsers(mappedUsers);
-          } else {
-            // No profiles found
-            toast({
-              title: "No Users Found",
-              description: "No user profiles exist in the database.",
-              variant: "destructive",
-            });
           }
         }
       } catch (error) {
@@ -166,13 +190,6 @@ const ManageUsers: React.FC = () => {
         [permission]: value
       };
 
-      // First, check if the profile exists
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
       // Update the permissions in Supabase
       const { error } = await supabase
         .from('profiles')
@@ -180,13 +197,13 @@ const ManageUsers: React.FC = () => {
           id: userId,
           permissions: updatedPermissions,
           updated_at: new Date().toISOString(),
-          // Preserve existing data if it exists
-          full_name: existingProfile?.full_name || userToUpdate.username,
-          avatar_url: existingProfile?.avatar_url || null,
-          created_at: existingProfile?.created_at || new Date().toISOString(),
+        }, { 
+          onConflict: 'id',
+          ignoreDuplicates: false 
         });
 
       if (error) {
+        console.error('Error updating permission:', error);
         throw error;
       }
 
@@ -275,6 +292,7 @@ const ManageUsers: React.FC = () => {
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
+                  <TableHead className="bg-background sticky top-0 z-20">User ID</TableHead>
                   <TableHead className="bg-background sticky top-0 z-20">User</TableHead>
                   <TableHead className="bg-background sticky top-0 z-20">Username</TableHead>
                   <TableHead className="bg-background sticky top-0 z-20">Edit Sales</TableHead>
@@ -288,19 +306,20 @@ const ManageUsers: React.FC = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-10">
+                    <TableCell colSpan={9} className="text-center py-10">
                       Loading users...
                     </TableCell>
                   </TableRow>
                 ) : users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-10">
+                    <TableCell colSpan={9} className="text-center py-10">
                       No users found
                     </TableCell>
                   </TableRow>
                 ) : (
                   users.map((user) => (
                     <TableRow key={user.id}>
+                      <TableCell>{user.index}</TableCell>
                       <TableCell className="flex items-center gap-3">
                         <Avatar>
                           <AvatarFallback>{getUserInitials(user.username)}</AvatarFallback>

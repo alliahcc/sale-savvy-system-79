@@ -36,3 +36,25 @@ export type EnhancedProfile = Database['public']['Tables']['profiles']['Row'] & 
   permissions?: UserPermissions;
   email?: string;
 };
+
+// Extend the Supabase client types to include admin functions
+declare module '@supabase/supabase-js' {
+  interface SupabaseAuthClient {
+    admin: {
+      listUsers(): Promise<{ 
+        data: { 
+          users: Array<{
+            id: string;
+            email?: string | null;
+            user_metadata?: {
+              full_name?: string;
+              [key: string]: any;
+            };
+            [key: string]: any;
+          }> 
+        } | null;
+        error: Error | null;
+      }>;
+    }
+  }
+}
