@@ -19,7 +19,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, Shield } from "lucide-react";
-import { supabase, EnhancedProfile, UserPermissions } from "@/integrations/supabase/client";
+import { 
+  supabase, 
+  EnhancedProfile, 
+  UserPermissions, 
+  ADMIN_EMAIL,
+  DEFAULT_PERMISSIONS 
+} from "@/integrations/supabase/client";
 import {
   Select,
   SelectContent,
@@ -45,19 +51,8 @@ interface User {
   username: string;
   isAdmin: boolean;
   permissions: UserPermissions;
-  index: number; // Add index for sequential numbering
+  index: number;
 }
-
-const DEFAULT_PERMISSIONS: UserPermissions = {
-  editSales: false,
-  editSalesDetail: false,
-  addSale: false,
-  addSalesDetail: false,
-  deleteSale: false,
-  deleteSalesDetail: false,
-  viewEmployees: true,
-  editEmployees: false
-};
 
 const ManageUsers: React.FC = () => {
   const { toast } = useToast();
@@ -77,88 +72,54 @@ const ManageUsers: React.FC = () => {
         if (user) {
           setCurrentUserId(user.id);
           
-          // Check if current user is admin (the specified email)
-          const isCurrentUserAdmin = user.email === "alliahalexis.cinco@neu.edu.ph";
-          setIsAdmin(isCurrentUserAdmin);
+          // Check if current user is admin
+          setIsAdmin(user.email === ADMIN_EMAIL);
           
           // Fetch all auth users
           const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
           
           if (authError || !authData) {
             console.error("Error fetching auth users:", authError);
-            
-            // Fallback to profiles if admin API not available
-            const { data: profilesData, error: profilesError } = await supabase
-              .from('profiles')
-              .select('*');
-            
-            if (profilesError) {
-              throw profilesError;
-            }
-            
-            if (profilesData && profilesData.length > 0) {
-              // Map profiles to users
-              const mappedProfiles = await Promise.all(profilesData.map(async (profile: any, index: number) => {
-                const isCurrentUser = profile.id === currentUserId;
-                
-                // Try to get email from auth if this is current user
-                let email = profile.email;
-                if (isCurrentUser) {
-                  email = user.email || profile.id;
-                }
-                
-                // Ensure permissions exist with defaults
-                const permissions = profile.permissions || DEFAULT_PERMISSIONS;
-                
-                return {
-                  id: profile.id,
-                  email: email || profile.id,
-                  username: profile.full_name || 'User',
-                  isAdmin: isCurrentUser && user.email === "alliahalexis.cinco@neu.edu.ph",
-                  permissions: permissions,
-                  index: index + 1
-                };
-              }));
-              
-              setUsers(mappedProfiles);
-            }
-          } else {
-            // We have auth users data, now fetch their profiles
-            const userIds = authData.users.map((authUser: any) => authUser.id);
-            
-            // Fetch all profiles
-            const { data: profilesData } = await supabase
-              .from('profiles')
-              .select('*')
-              .in('id', userIds);
-              
-            // Create a map for faster lookups
-            const profilesMap = new Map();
-            if (profilesData) {
-              profilesData.forEach((profile: EnhancedProfile) => {
-                profilesMap.set(profile.id, profile);
-              });
-            }
-            
-            // Combine auth and profiles data
-            const mappedUsers = authData.users.map((authUser: any, index: number) => {
-              const profile = profilesMap.get(authUser.id) as EnhancedProfile | undefined;
-              
-              // Use defaults if no permissions found
-              const permissions = profile?.permissions || DEFAULT_PERMISSIONS;
-              
-              return {
-                id: authUser.id,
-                email: authUser.email || 'No email',
-                username: profile?.full_name || authUser.user_metadata?.full_name || 'User',
-                isAdmin: authUser.email === "alliahalexis.cinco@neu.edu.ph",
-                permissions: permissions,
-                index: index + 1 // 1-based indexing
-              };
-            });
-            
-            setUsers(mappedUsers);
+            throw new Error("Failed to fetch users: " + (authError?.message || "Unknown error"));
           }
+          
+          // Get all profiles for these users
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('*');
+          
+          // Create a map of profiles by ID for faster lookups
+          const profilesMap = new Map();
+          if (profilesData) {
+            profilesData.forEach((profile: EnhancedProfile) => {
+              profilesMap.set(profile.id, profile);
+            });
+          }
+          
+          // Map auth users to our format
+          const mappedUsers = authData.users.map((authUser: any, index: number) => {
+            const profile = profilesMap.get(authUser.id) as EnhancedProfile | undefined;
+            
+            // Use email from auth user
+            const email = authUser.email || 'No email';
+            
+            // Determine if user is admin
+            const userIsAdmin = email === ADMIN_EMAIL;
+            
+            // Use existing permissions if available, or set defaults
+            const permissions = profile?.permissions || DEFAULT_PERMISSIONS;
+            
+            return {
+              id: authUser.id,
+              email: email,
+              username: profile?.full_name || authUser.user_metadata?.full_name || 'User',
+              isAdmin: userIsAdmin,
+              permissions: permissions,
+              index: index + 1 // 1-based indexing for User ID
+            };
+          });
+          
+          setUsers(mappedUsers);
         }
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -175,6 +136,7 @@ const ManageUsers: React.FC = () => {
     fetchUsers();
   }, [toast]);
 
+  // Function to update user permissions
   const updatePermission = async (userId: string, permission: keyof UserPermissions, value: boolean) => {
     if (!isAdmin) {
       toast({
@@ -188,7 +150,14 @@ const ManageUsers: React.FC = () => {
     try {
       // Find the user to update
       const userToUpdate = users.find(user => user.id === userId);
-      if (!userToUpdate) return;
+      if (!userToUpdate) {
+        toast({
+          title: "Error",
+          description: "User not found.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       // Create updated permissions
       const updatedPermissions = {
@@ -199,18 +168,43 @@ const ManageUsers: React.FC = () => {
       console.log("Updating permissions for user:", userId, permission, value);
       console.log("Updated permissions object:", updatedPermissions);
 
-      // Update the permissions in Supabase
-      const { error } = await supabase
+      // Make sure the profile entry exists before updating
+      const { data: existingProfile, error: checkError } = await supabase
         .from('profiles')
-        .update({
-          permissions: updatedPermissions,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', userId);
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-      if (error) {
-        console.error('Error updating permission:', error);
-        throw error;
+      if (checkError) {
+        // Profile doesn't exist, create it
+        const { error: createError } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            permissions: updatedPermissions,
+            full_name: userToUpdate.username,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (createError) {
+          console.error('Error creating profile:', createError);
+          throw createError;
+        }
+      } else {
+        // Profile exists, update it
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            permissions: updatedPermissions,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', userId);
+
+        if (error) {
+          console.error('Error updating permission:', error);
+          throw error;
+        }
       }
 
       // Update local state
@@ -226,16 +220,17 @@ const ManageUsers: React.FC = () => {
         title: "Permission Updated",
         description: `Permission updated successfully for ${userToUpdate.username}`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating permission:', error);
       toast({
         title: "Error",
-        description: "Failed to update permission. Please try again.",
+        description: `Failed to update permission: ${error.message || "Unknown error"}`,
         variant: "destructive",
       });
     }
   };
 
+  // Function to update user type (admin/user)
   const updateUserType = async (userId: string, isAdminValue: boolean) => {
     if (!isAdmin) {
       toast({
@@ -249,9 +244,20 @@ const ManageUsers: React.FC = () => {
     try {
       // Find the user to update
       const userToUpdate = users.find(user => user.id === userId);
-      if (!userToUpdate) return;
+      if (!userToUpdate) {
+        toast({
+          title: "Error",
+          description: "User not found.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-      // Update local state first for immediate UI feedback
+      // We can't actually change the admin status in the database since this requires
+      // changing the email (in this implementation). But we can update the UI to show
+      // the user as admin/user.
+      
+      // Update local state
       setUsers(prevUsers => 
         prevUsers.map(user => 
           user.id === userId 
@@ -260,18 +266,15 @@ const ManageUsers: React.FC = () => {
         )
       );
       
-      // Store the admin status in user metadata
-      // Note: In a real system, you might need to update this through an admin API,
-      // but for this demo we'll just update the local state and show a toast
       toast({
         title: "User Type Updated",
-        description: `User ${userToUpdate.username} is now a ${isAdminValue ? 'Admin' : 'User'}`,
+        description: `User ${userToUpdate.username} is now shown as a ${isAdminValue ? 'Admin' : 'User'}`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating user type:', error);
       toast({
         title: "Error",
-        description: "Failed to update user type. Please try again.",
+        description: `Failed to update user type: ${error.message || "Unknown error"}`,
         variant: "destructive",
       });
     }
@@ -286,6 +289,7 @@ const ManageUsers: React.FC = () => {
       .join('');
   };
 
+  // Component for permission toggle dropdown
   const PermissionToggle = ({ userId, permission, value }: { userId: string, permission: keyof UserPermissions, value: boolean }) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -305,7 +309,7 @@ const ManageUsers: React.FC = () => {
     </DropdownMenu>
   );
 
-  // Reordered display columns
+  // Reordered display columns as requested
   const displayColumns = [
     "editSales", 
     "addSale", 

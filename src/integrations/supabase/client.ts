@@ -39,6 +39,21 @@ export type EnhancedProfile = Database['public']['Tables']['profiles']['Row'] & 
   email?: string;
 };
 
+// Admin email constant to ensure consistency
+export const ADMIN_EMAIL = "alliahalexis.cinco@neu.edu.ph";
+
+// Default permissions for regular users
+export const DEFAULT_PERMISSIONS: UserPermissions = {
+  editSales: false,
+  editSalesDetail: false,
+  addSale: false,
+  addSalesDetail: false,
+  deleteSale: false,
+  deleteSalesDetail: false,
+  viewEmployees: true,
+  editEmployees: false
+};
+
 // Extend the Supabase client types to include admin functions
 declare module '@supabase/supabase-js' {
   interface SupabaseAuthClient {
