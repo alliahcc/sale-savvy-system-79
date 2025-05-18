@@ -44,8 +44,10 @@ interface User {
 const DEFAULT_PERMISSIONS: UserPermissions = {
   editSales: false,
   editSalesDetail: false,
-  newSale: false,
+  addSale: false,
+  addSalesDetail: false,
   deleteSale: false,
+  deleteSalesDetail: false,
   viewEmployees: true,
   editEmployees: false
 };
@@ -72,64 +74,58 @@ const ManageUsers: React.FC = () => {
           const isCurrentUserAdmin = user.email === "alliahalexis.cinco@neu.edu.ph";
           setIsAdmin(isCurrentUserAdmin);
           
-          // Fetch all users from Auth API
-          const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+          // Fetch all auth users
+          const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
           
-          if (authError) {
+          if (authError || !authData) {
             console.error("Error fetching auth users:", authError);
-            // If we can't fetch from admin API, fall back to profiles table
+            
+            // Fallback to profiles if admin API not available
             const { data: profilesData, error: profilesError } = await supabase
               .from('profiles')
               .select('*');
             
             if (profilesError) {
-              console.error("Error fetching profiles:", profilesError);
               throw profilesError;
             }
             
-            // Map profiles to users
             if (profilesData && profilesData.length > 0) {
-              const mappedUsers = profilesData.map((profile: EnhancedProfile, index: number) => {
-                // For the current user, we know their email from auth
+              // Map profiles to users
+              const mappedProfiles = await Promise.all(profilesData.map(async (profile: any, index: number) => {
                 const isCurrentUser = profile.id === currentUserId;
                 
-                // Extract permissions or use defaults
-                const permissions = profile.permissions || DEFAULT_PERMISSIONS;
+                // Try to get email from auth if this is current user
+                let email = profile.email;
+                if (isCurrentUser) {
+                  email = user.email || profile.id;
+                }
                 
-                // Determine if admin by email (for current user only, since we know their email)
-                const isUserAdmin = isCurrentUser && user.email === "alliahalexis.cinco@neu.edu.ph";
+                // Ensure permissions exist with defaults
+                const permissions = profile.permissions || DEFAULT_PERMISSIONS;
                 
                 return {
                   id: profile.id,
-                  // Use known email for current user, otherwise use placeholder or stored email
-                  email: isCurrentUser ? user.email || profile.id : profile.email || profile.id,
+                  email: email || profile.id,
                   username: profile.full_name || 'User',
-                  isAdmin: isUserAdmin,
+                  isAdmin: isCurrentUser && user.email === "alliahalexis.cinco@neu.edu.ph",
                   permissions: permissions,
-                  index: index + 1 // Add 1-based indexing
+                  index: index + 1
                 };
-              });
+              }));
               
-              setUsers(mappedUsers);
-            } else {
-              // No profiles found
-              toast({
-                title: "No Users Found",
-                description: "No user profiles exist in the database.",
-                variant: "destructive",
-              });
+              setUsers(mappedProfiles);
             }
-          } else if (authUsers && authUsers.users) {
-            // We got auth users, now let's get their profiles for additional data
-            const userIds = authUsers.users.map(user => user.id);
+          } else {
+            // We have auth users data, now fetch their profiles
+            const userIds = authData.users.map((authUser: any) => authUser.id);
             
-            // Fetch profiles for these users
+            // Fetch all profiles
             const { data: profilesData } = await supabase
               .from('profiles')
               .select('*')
               .in('id', userIds);
               
-            // Create a map of profiles by user ID for quick lookup
+            // Create a map for faster lookups
             const profilesMap = new Map();
             if (profilesData) {
               profilesData.forEach((profile: EnhancedProfile) => {
@@ -137,17 +133,20 @@ const ManageUsers: React.FC = () => {
               });
             }
             
-            // Map auth users to our format, enriched with profile data
-            const mappedUsers = authUsers.users.map((authUser, index) => {
+            // Combine auth and profiles data
+            const mappedUsers = authData.users.map((authUser: any, index: number) => {
               const profile = profilesMap.get(authUser.id) as EnhancedProfile | undefined;
+              
+              // Use defaults if no permissions found
+              const permissions = profile?.permissions || DEFAULT_PERMISSIONS;
               
               return {
                 id: authUser.id,
                 email: authUser.email || 'No email',
                 username: profile?.full_name || authUser.user_metadata?.full_name || 'User',
                 isAdmin: authUser.email === "alliahalexis.cinco@neu.edu.ph",
-                permissions: profile?.permissions || DEFAULT_PERMISSIONS,
-                index: index + 1 // Add 1-based indexing
+                permissions: permissions,
+                index: index + 1 // 1-based indexing
               };
             });
             
@@ -189,18 +188,18 @@ const ManageUsers: React.FC = () => {
         ...userToUpdate.permissions,
         [permission]: value
       };
+      
+      console.log("Updating permissions for user:", userId, permission, value);
+      console.log("Updated permissions object:", updatedPermissions);
 
       // Update the permissions in Supabase
       const { error } = await supabase
         .from('profiles')
-        .upsert({
-          id: userId,
+        .update({
           permissions: updatedPermissions,
           updated_at: new Date().toISOString(),
-        }, { 
-          onConflict: 'id',
-          ignoreDuplicates: false 
-        });
+        })
+        .eq('id', userId);
 
       if (error) {
         console.error('Error updating permission:', error);
@@ -260,12 +259,24 @@ const ManageUsers: React.FC = () => {
 
   const permissionsLabels = {
     editSales: "Edit Sales",
-    editSalesDetail: "Edit Sales Detail",
-    newSale: "New Sale",
+    editSalesDetail: "Edit Sales Detail", 
+    addSale: "Add Sale",
+    addSalesDetail: "Add Sales Detail",
     deleteSale: "Delete Sale",
+    deleteSalesDetail: "Delete Sales Detail",
     viewEmployees: "View Employees",
     editEmployees: "Edit Employees"
   };
+
+  // Only display the columns needed according to user request
+  const displayColumns = [
+    "editSales", 
+    "editSalesDetail", 
+    "addSale", 
+    "addSalesDetail", 
+    "deleteSale", 
+    "deleteSalesDetail"
+  ];
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -293,26 +304,26 @@ const ManageUsers: React.FC = () => {
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="bg-background sticky top-0 z-20">User ID</TableHead>
-                  <TableHead className="bg-background sticky top-0 z-20">User</TableHead>
+                  <TableHead className="bg-background sticky top-0 z-20">Email</TableHead>
                   <TableHead className="bg-background sticky top-0 z-20">Username</TableHead>
-                  <TableHead className="bg-background sticky top-0 z-20">Edit Sales</TableHead>
-                  <TableHead className="bg-background sticky top-0 z-20">Edit Sales Detail</TableHead>
-                  <TableHead className="bg-background sticky top-0 z-20">New Sale</TableHead>
-                  <TableHead className="bg-background sticky top-0 z-20">Delete Sale</TableHead>
-                  <TableHead className="bg-background sticky top-0 z-20">View Employees</TableHead>
-                  <TableHead className="bg-background sticky top-0 z-20">Edit Employees</TableHead>
+                  {displayColumns.map(key => (
+                    <TableHead key={key} className="bg-background sticky top-0 z-20">
+                      {permissionsLabels[key as keyof typeof permissionsLabels]}
+                    </TableHead>
+                  ))}
+                  <TableHead className="bg-background sticky top-0 z-20">Type</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-10">
+                    <TableCell colSpan={10} className="text-center py-10">
                       Loading users...
                     </TableCell>
                   </TableRow>
                 ) : users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-10">
+                    <TableCell colSpan={10} className="text-center py-10">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -320,27 +331,20 @@ const ManageUsers: React.FC = () => {
                   users.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell>{user.index}</TableCell>
+                      <TableCell>{user.email}</TableCell>
                       <TableCell className="flex items-center gap-3">
                         <Avatar>
                           <AvatarFallback>{getUserInitials(user.username)}</AvatarFallback>
                         </Avatar>
-                        <div>
-                          <div className="font-medium">{user.email}</div>
-                          {user.isAdmin && (
-                            <div className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full inline-block mt-1">
-                              Admin
-                            </div>
-                          )}
-                        </div>
+                        <div className="font-medium">{user.username}</div>
                       </TableCell>
-                      <TableCell>{user.username}</TableCell>
-                      {Object.entries(permissionsLabels).map(([key, label]) => (
+                      {displayColumns.map(key => (
                         <TableCell key={`${user.id}-${key}`}>
                           {isAdmin ? (
                             <PermissionToggle 
                               userId={user.id} 
                               permission={key} 
-                              value={user.permissions[key as keyof typeof user.permissions]} 
+                              value={user.permissions[key as keyof typeof user.permissions] || false} 
                             />
                           ) : (
                             <div className="px-3 py-2 border rounded">
@@ -349,6 +353,11 @@ const ManageUsers: React.FC = () => {
                           )}
                         </TableCell>
                       ))}
+                      <TableCell>
+                        <div className={`text-xs px-2 py-1 rounded-full inline-block ${user.isAdmin ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-700'}`}>
+                          {user.isAdmin ? 'Admin' : 'User'}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
