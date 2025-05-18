@@ -37,6 +37,7 @@ export type UserPermissions = {
 export type EnhancedProfile = Database['public']['Tables']['profiles']['Row'] & {
   permissions?: UserPermissions;
   email?: string;
+  is_admin?: boolean;
 };
 
 // Admin email constant to ensure consistency

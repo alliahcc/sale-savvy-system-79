@@ -73,53 +73,73 @@ const ManageUsers: React.FC = () => {
           setCurrentUserId(user.id);
           
           // Check if current user is admin
-          setIsAdmin(user.email === ADMIN_EMAIL);
+          const isCurrentUserAdmin = user.email === ADMIN_EMAIL;
+          setIsAdmin(isCurrentUserAdmin);
           
-          // Fetch all auth users
-          const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
-          
-          if (authError || !authData) {
-            console.error("Error fetching auth users:", authError);
-            throw new Error("Failed to fetch users: " + (authError?.message || "Unknown error"));
+          if (!isCurrentUserAdmin) {
+            toast({
+              title: "Access Denied",
+              description: "Only administrators can view this page.",
+              variant: "destructive",
+            });
+            return;
           }
           
-          // Get all profiles for these users
-          const { data: profilesData } = await supabase
+          // Fetch all profiles instead of using admin API
+          const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select('*');
           
-          // Create a map of profiles by ID for faster lookups
-          const profilesMap = new Map();
-          if (profilesData) {
-            profilesData.forEach((profile: EnhancedProfile) => {
-              profilesMap.set(profile.id, profile);
+          if (profilesError) {
+            console.error("Error fetching profiles:", profilesError);
+            throw new Error("Failed to fetch profiles: " + profilesError.message);
+          }
+          
+          if (!profilesData || profilesData.length === 0) {
+            console.log("No profiles found");
+            setUsers([]);
+            return;
+          }
+          
+          // For each profile, fetch the user email using their auth ID
+          const usersWithEmails: User[] = [];
+          let index = 1; // Start index from 1
+          
+          for (const profile of profilesData) {
+            // Handle profiles with missing IDs
+            if (!profile.id) continue;
+            
+            // Get user email if available (public profile info)
+            // For regular auth users, we'll need to look up their email another way
+            let email = '';
+            
+            // Use a workaround - this info may be available in the auth.users table with RLS
+            const { data: userData } = await supabase
+              .from('users')
+              .select('email')
+              .eq('id', profile.id)
+              .single();
+            
+            if (userData && userData.email) {
+              email = userData.email;
+            }
+            
+            const isUserAdmin = email === ADMIN_EMAIL;
+            
+            // Use existing permissions if available, or set defaults
+            const permissions = profile.permissions || DEFAULT_PERMISSIONS;
+            
+            usersWithEmails.push({
+              id: profile.id,
+              email: email || 'No email available',
+              username: profile.full_name || 'User',
+              isAdmin: isUserAdmin,
+              permissions: permissions,
+              index: index++
             });
           }
           
-          // Map auth users to our format
-          const mappedUsers = authData.users.map((authUser: any, index: number) => {
-            const profile = profilesMap.get(authUser.id) as EnhancedProfile | undefined;
-            
-            // Use email from auth user
-            const email = authUser.email || 'No email';
-            
-            // Determine if user is admin
-            const userIsAdmin = email === ADMIN_EMAIL;
-            
-            // Use existing permissions if available, or set defaults
-            const permissions = profile?.permissions || DEFAULT_PERMISSIONS;
-            
-            return {
-              id: authUser.id,
-              email: email,
-              username: profile?.full_name || authUser.user_metadata?.full_name || 'User',
-              isAdmin: userIsAdmin,
-              permissions: permissions,
-              index: index + 1 // 1-based indexing for User ID
-            };
-          });
-          
-          setUsers(mappedUsers);
+          setUsers(usersWithEmails);
         }
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -148,6 +168,8 @@ const ManageUsers: React.FC = () => {
     }
 
     try {
+      console.log("Updating permission:", userId, permission, value);
+      
       // Find the user to update
       const userToUpdate = users.find(user => user.id === userId);
       if (!userToUpdate) {
@@ -165,10 +187,9 @@ const ManageUsers: React.FC = () => {
         [permission]: value
       };
       
-      console.log("Updating permissions for user:", userId, permission, value);
       console.log("Updated permissions object:", updatedPermissions);
 
-      // Make sure the profile entry exists before updating
+      // Check if profile exists before updating
       const { data: existingProfile, error: checkError } = await supabase
         .from('profiles')
         .select('*')
@@ -176,6 +197,7 @@ const ManageUsers: React.FC = () => {
         .single();
 
       if (checkError) {
+        console.log("Profile doesn't exist, creating one");
         // Profile doesn't exist, create it
         const { error: createError } = await supabase
           .from('profiles')
@@ -192,6 +214,7 @@ const ManageUsers: React.FC = () => {
           throw createError;
         }
       } else {
+        console.log("Profile exists, updating it");
         // Profile exists, update it
         const { error } = await supabase
           .from('profiles')
@@ -254,8 +277,19 @@ const ManageUsers: React.FC = () => {
       }
 
       // We can't actually change the admin status in the database since this requires
-      // changing the email (in this implementation). But we can update the UI to show
-      // the user as admin/user.
+      // changing the email, but we can store the designation in the profile
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_admin: isAdminValue,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('Error updating user type:', error);
+        throw error;
+      }
       
       // Update local state
       setUsers(prevUsers => 
