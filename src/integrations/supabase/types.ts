@@ -237,7 +237,15 @@ export type Database = {
           permissions?: Json | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "auth_users_view"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sales: {
         Row: {
@@ -308,12 +316,93 @@ export type Database = {
           },
         ]
       }
+      user_accounts: {
+        Row: {
+          id: string
+          role: string
+        }
+        Insert: {
+          id: string
+          role?: string
+        }
+        Update: {
+          id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_accounts_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "auth_users_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_permissions: {
+        Row: {
+          add_sales: boolean | null
+          add_sales_detail: boolean | null
+          delete_sales: boolean | null
+          delete_sales_detail: boolean | null
+          edit_sales: boolean | null
+          edit_sales_detail: boolean | null
+          user_id: string
+        }
+        Insert: {
+          add_sales?: boolean | null
+          add_sales_detail?: boolean | null
+          delete_sales?: boolean | null
+          delete_sales_detail?: boolean | null
+          edit_sales?: boolean | null
+          edit_sales_detail?: boolean | null
+          user_id: string
+        }
+        Update: {
+          add_sales?: boolean | null
+          add_sales_detail?: boolean | null
+          delete_sales?: boolean | null
+          delete_sales_detail?: boolean | null
+          edit_sales?: boolean | null
+          edit_sales_detail?: boolean | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_permissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "auth_users_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      auth_users_view: {
+        Row: {
+          email: string | null
+          id: string | null
+          username: string | null
+        }
+        Insert: {
+          email?: string | null
+          id?: string | null
+          username?: never
+        }
+        Update: {
+          email?: string | null
+          id?: string | null
+          username?: never
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

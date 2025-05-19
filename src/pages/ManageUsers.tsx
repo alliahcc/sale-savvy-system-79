@@ -19,13 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, Shield } from "lucide-react";
-import { 
-  supabase, 
-  EnhancedProfile, 
-  UserPermissions, 
-  ADMIN_EMAIL,
-  DEFAULT_PERMISSIONS 
-} from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
   SelectContent,
@@ -33,6 +27,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+// Define types
+type UserPermissions = {
+  editSales: boolean;
+  addSale: boolean;
+  deleteSale: boolean;
+  editSalesDetail: boolean;
+  addSalesDetail: boolean;
+  deleteSalesDetail: boolean;
+  viewEmployees: boolean;
+  editEmployees: boolean;
+};
+
+// Default permissions
+const DEFAULT_PERMISSIONS: UserPermissions = {
+  editSales: false,
+  addSale: false,
+  deleteSale: false,
+  editSalesDetail: false,
+  addSalesDetail: false,
+  deleteSalesDetail: false,
+  viewEmployees: true,
+  editEmployees: false
+};
+
+// Admin email
+const ADMIN_EMAIL = "alliahalexis.cinco@neu.edu.ph";
 
 interface User {
   id: string;
@@ -49,7 +70,7 @@ const ManageUsers: React.FC = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Fetch users from Supabase
+  // Fetch users from Supabase Edge Function
   useEffect(() => {
     async function fetchUsers() {
       try {
@@ -72,69 +93,61 @@ const ManageUsers: React.FC = () => {
             });
             return;
           }
-          
-          // Get all auth users directly
-          const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-          
-          if (authError) {
-            console.error("Error fetching auth users:", authError);
-            throw new Error("Failed to fetch auth users: " + authError.message);
+
+          // Get current session for the token
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            toast({
+              title: "Authentication Required",
+              description: "Please log in to access this page.",
+              variant: "destructive",
+            });
+            return;
           }
           
-          // Fetch all profiles to match with auth users
-          const { data: profilesData, error: profilesError } = await supabase
-            .from('profiles')
-            .select('*');
-          
-          if (profilesError) {
-            console.error("Error fetching profiles:", profilesError);
-            throw new Error("Failed to fetch profiles: " + profilesError.message);
-          }
-          
-          // Create a map of profiles by user ID
-          const profileMap = new Map<string, EnhancedProfile>();
-          profilesData?.forEach(profile => {
-            if (profile.id) {
-              profileMap.set(profile.id, profile as EnhancedProfile);
+          // Call the edge function to get users with admin privileges
+          const response = await fetch(
+            'https://unixmerhujdxfsikiekp.supabase.co/functions/v1/list-users',
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+              }
             }
-          });
+          );
           
-          // For each auth user, match with profile info
-          const usersWithProfiles: User[] = [];
-          let index = 1; // Start index from 1
-          
-          if (authUsers?.users) {
-            for (const authUser of authUsers.users) {
-              if (!authUser.id) continue;
-              
-              // Get profile from map or create default
-              const profile = profileMap.get(authUser.id) || {
-                id: authUser.id,
-                full_name: authUser.user_metadata?.full_name || 'User',
-                is_admin: authUser.email === ADMIN_EMAIL,
-                permissions: DEFAULT_PERMISSIONS
-              };
-              
-              // Use existing permissions if available, or set defaults
-              const permissions = profile.permissions as UserPermissions || DEFAULT_PERMISSIONS;
-              
-              usersWithProfiles.push({
-                id: authUser.id,
-                username: profile.full_name || authUser.user_metadata?.full_name || 'User',
-                isAdmin: Boolean(profile.is_admin) || authUser.email === ADMIN_EMAIL,
-                permissions: permissions,
-                index: index++
-              });
-            }
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch users');
           }
           
-          setUsers(usersWithProfiles);
+          const authUsers = await response.json();
+          
+          // Process users
+          const processedUsers: User[] = [];
+          let index = 1;
+          
+          for (const authUser of authUsers) {
+            // Get permissions from profile or set defaults
+            const permissions = authUser.profile?.permissions as UserPermissions || DEFAULT_PERMISSIONS;
+            
+            processedUsers.push({
+              id: authUser.id,
+              username: authUser.username,
+              isAdmin: authUser.isAdmin,
+              permissions: permissions,
+              index: index++
+            });
+          }
+          
+          setUsers(processedUsers);
         }
       } catch (error: any) {
         console.error('Error fetching users:', error);
         toast({
           title: "Error",
-          description: "Failed to load users. Please try again: " + error.message,
+          description: `Failed to load users: ${error.message || "Unknown error"}`,
           variant: "destructive",
         });
       } finally {
