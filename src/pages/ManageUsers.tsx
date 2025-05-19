@@ -34,17 +34,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Update the UserProfile interface to include permissions
-interface UserProfile {
-  avatar_url: string | null;
-  created_at: string;
-  full_name: string | null;
-  id: string;
-  updated_at: string;
-  permissions?: UserPermissions;
-  email?: string;
-}
-
 interface User {
   id: string;
   email: string;
@@ -85,7 +74,7 @@ const ManageUsers: React.FC = () => {
             return;
           }
           
-          // Fetch all profiles instead of using admin API
+          // Fetch all profiles
           const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select('*');
@@ -100,40 +89,46 @@ const ManageUsers: React.FC = () => {
             setUsers([]);
             return;
           }
+
+          // Get all auth users to match with profiles
+          const { data: authUserData, error: authError } = await supabase.auth.admin.listUsers();
           
-          // For each profile, fetch the user email using their auth ID
+          if (authError) {
+            console.error("Error fetching auth users:", authError);
+          }
+
+          const authUsers = authUserData?.users || [];
+          const emailMap = new Map<string, string>();
+          
+          // Create a map of user IDs to emails
+          authUsers.forEach(authUser => {
+            if (authUser.id && authUser.email) {
+              emailMap.set(authUser.id, authUser.email);
+            }
+          });
+
+          // For each profile, match with auth user info
           const usersWithEmails: User[] = [];
           let index = 1; // Start index from 1
           
           for (const profile of profilesData) {
-            // Handle profiles with missing IDs
             if (!profile.id) continue;
             
-            // Get user email if available (public profile info)
-            // For regular auth users, we'll need to look up their email another way
-            let email = '';
-            
-            // Use a workaround - this info may be available in the auth.users table with RLS
-            const { data: userData } = await supabase
-              .from('users')
-              .select('email')
-              .eq('id', profile.id)
-              .single();
-            
-            if (userData && userData.email) {
-              email = userData.email;
-            }
-            
+            // Get email from auth users map
+            const email = emailMap.get(profile.id) || '';
             const isUserAdmin = email === ADMIN_EMAIL;
             
+            // Cast profile to EnhancedProfile to access permissions
+            const enhancedProfile = profile as EnhancedProfile;
+            
             // Use existing permissions if available, or set defaults
-            const permissions = profile.permissions || DEFAULT_PERMISSIONS;
+            const permissions = enhancedProfile.permissions || DEFAULT_PERMISSIONS;
             
             usersWithEmails.push({
               id: profile.id,
               email: email || 'No email available',
               username: profile.full_name || 'User',
-              isAdmin: isUserAdmin,
+              isAdmin: isUserAdmin || Boolean(enhancedProfile.is_admin),
               permissions: permissions,
               index: index++
             });
@@ -141,11 +136,11 @@ const ManageUsers: React.FC = () => {
           
           setUsers(usersWithEmails);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching users:', error);
         toast({
           title: "Error",
-          description: "Failed to load users. Please try again.",
+          description: "Failed to load users. Please try again: " + error.message,
           variant: "destructive",
         });
       } finally {
