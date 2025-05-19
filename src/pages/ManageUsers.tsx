@@ -36,7 +36,6 @@ import {
 
 interface User {
   id: string;
-  email: string;
   username: string;
   isAdmin: boolean;
   permissions: UserPermissions;
@@ -74,7 +73,15 @@ const ManageUsers: React.FC = () => {
             return;
           }
           
-          // Fetch all profiles
+          // Get all auth users directly
+          const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+          
+          if (authError) {
+            console.error("Error fetching auth users:", authError);
+            throw new Error("Failed to fetch auth users: " + authError.message);
+          }
+          
+          // Fetch all profiles to match with auth users
           const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select('*');
@@ -84,57 +91,44 @@ const ManageUsers: React.FC = () => {
             throw new Error("Failed to fetch profiles: " + profilesError.message);
           }
           
-          if (!profilesData || profilesData.length === 0) {
-            console.log("No profiles found");
-            setUsers([]);
-            return;
-          }
-
-          // Get all auth users to match with profiles
-          const { data: authUserData, error: authError } = await supabase.auth.admin.listUsers();
-          
-          if (authError) {
-            console.error("Error fetching auth users:", authError);
-          }
-
-          const authUsers = authUserData?.users || [];
-          const emailMap = new Map<string, string>();
-          
-          // Create a map of user IDs to emails
-          authUsers.forEach(authUser => {
-            if (authUser.id && authUser.email) {
-              emailMap.set(authUser.id, authUser.email);
+          // Create a map of profiles by user ID
+          const profileMap = new Map<string, EnhancedProfile>();
+          profilesData?.forEach(profile => {
+            if (profile.id) {
+              profileMap.set(profile.id, profile as EnhancedProfile);
             }
           });
-
-          // For each profile, match with auth user info
-          const usersWithEmails: User[] = [];
+          
+          // For each auth user, match with profile info
+          const usersWithProfiles: User[] = [];
           let index = 1; // Start index from 1
           
-          for (const profile of profilesData) {
-            if (!profile.id) continue;
-            
-            // Get email from auth users map
-            const email = emailMap.get(profile.id) || '';
-            const isUserAdmin = email === ADMIN_EMAIL;
-            
-            // Cast profile to EnhancedProfile to access permissions
-            const enhancedProfile = profile as EnhancedProfile;
-            
-            // Use existing permissions if available, or set defaults
-            const permissions = enhancedProfile.permissions || DEFAULT_PERMISSIONS;
-            
-            usersWithEmails.push({
-              id: profile.id,
-              email: email || 'No email available',
-              username: profile.full_name || 'User',
-              isAdmin: isUserAdmin || Boolean(enhancedProfile.is_admin),
-              permissions: permissions,
-              index: index++
-            });
+          if (authUsers?.users) {
+            for (const authUser of authUsers.users) {
+              if (!authUser.id) continue;
+              
+              // Get profile from map or create default
+              const profile = profileMap.get(authUser.id) || {
+                id: authUser.id,
+                full_name: authUser.user_metadata?.full_name || 'User',
+                is_admin: authUser.email === ADMIN_EMAIL,
+                permissions: DEFAULT_PERMISSIONS
+              };
+              
+              // Use existing permissions if available, or set defaults
+              const permissions = profile.permissions as UserPermissions || DEFAULT_PERMISSIONS;
+              
+              usersWithProfiles.push({
+                id: authUser.id,
+                username: profile.full_name || authUser.user_metadata?.full_name || 'User',
+                isAdmin: Boolean(profile.is_admin) || authUser.email === ADMIN_EMAIL,
+                permissions: permissions,
+                index: index++
+              });
+            }
           }
           
-          setUsers(usersWithEmails);
+          setUsers(usersWithProfiles);
         }
       } catch (error: any) {
         console.error('Error fetching users:', error);
@@ -385,7 +379,6 @@ const ManageUsers: React.FC = () => {
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="bg-background sticky top-0 z-20">User ID</TableHead>
-                  <TableHead className="bg-background sticky top-0 z-20">Email</TableHead>
                   <TableHead className="bg-background sticky top-0 z-20">Username</TableHead>
                   {displayColumns.map(key => (
                     <TableHead key={key} className="bg-background sticky top-0 z-20">
@@ -398,13 +391,13 @@ const ManageUsers: React.FC = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-10">
+                    <TableCell colSpan={9} className="text-center py-10">
                       Loading users...
                     </TableCell>
                   </TableRow>
                 ) : users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-10">
+                    <TableCell colSpan={9} className="text-center py-10">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -412,7 +405,6 @@ const ManageUsers: React.FC = () => {
                   users.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell>{user.index}</TableCell>
-                      <TableCell>{user.email}</TableCell>
                       <TableCell className="flex items-center gap-3">
                         <Avatar>
                           <AvatarFallback>{getUserInitials(user.username)}</AvatarFallback>
