@@ -46,6 +46,17 @@ interface SaleItem {
   isEditing?: boolean;
 }
 
+// Define an interface for the user permissions
+interface UserPermissions {
+  addSale: boolean;
+  editSales: boolean;
+  deleteSale: boolean;
+  addSalesDetail: boolean;
+  editSalesDetail: boolean;
+  deleteSalesDetail: boolean;
+  [key: string]: boolean;  // Allow for any other boolean permissions
+}
+
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -103,8 +114,8 @@ const Sales: React.FC = () => {
 
   const [salesData, setSalesData] = useState<SaleWithDetails[]>([]);
   
-  // User permissions state
-  const [userPermissions, setUserPermissions] = useState({
+  // User permissions state with proper typing
+  const [userPermissions, setUserPermissions] = useState<UserPermissions>({
     addSale: false,
     editSales: false,
     deleteSale: false,
@@ -165,13 +176,16 @@ const Sales: React.FC = () => {
           
           // Otherwise use the permissions from profile
           if (profileData?.permissions) {
+            // Type assertion to ensure permissions is treated as an object with the right structure
+            const permissions = profileData.permissions as UserPermissions;
+            
             setUserPermissions({
-              addSale: profileData.permissions.addSale || false,
-              editSales: profileData.permissions.editSales || false,
-              deleteSale: profileData.permissions.deleteSale || false,
-              addSalesDetail: profileData.permissions.addSalesDetail || false,
-              editSalesDetail: profileData.permissions.editSalesDetail || false,
-              deleteSalesDetail: profileData.permissions.deleteSalesDetail || false
+              addSale: permissions.addSale || false,
+              editSales: permissions.editSales || false,
+              deleteSale: permissions.deleteSale || false,
+              addSalesDetail: permissions.addSalesDetail || false,
+              editSalesDetail: permissions.editSalesDetail || false,
+              deleteSalesDetail: permissions.deleteSalesDetail || false
             });
           }
         }
