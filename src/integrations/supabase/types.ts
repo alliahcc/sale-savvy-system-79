@@ -347,6 +347,7 @@ export type Database = {
           delete_sales_detail: boolean | null
           edit_sales: boolean | null
           edit_sales_detail: boolean | null
+          isBlocked: boolean | null
           user_id: string
         }
         Insert: {
@@ -356,6 +357,7 @@ export type Database = {
           delete_sales_detail?: boolean | null
           edit_sales?: boolean | null
           edit_sales_detail?: boolean | null
+          isBlocked?: boolean | null
           user_id: string
         }
         Update: {
@@ -365,6 +367,7 @@ export type Database = {
           delete_sales_detail?: boolean | null
           edit_sales?: boolean | null
           edit_sales_detail?: boolean | null
+          isBlocked?: boolean | null
           user_id?: string
         }
         Relationships: [
