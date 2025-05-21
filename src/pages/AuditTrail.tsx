@@ -75,7 +75,6 @@ const AuditTrail: React.FC = () => {
       setIsLoading(true);
       
       // Temporarily use a generic type and cast the result
-      // Using 'sales_audit_log' instead of 'sales_audit'
       const { data, error } = await supabase
         .from('sales')  // Use an existing table as a placeholder
         .select('*')
@@ -85,15 +84,33 @@ const AuditTrail: React.FC = () => {
       
       if (data) {
         // In a real implementation, we would fetch actual audit records
-        // For now, let's create mock audit data from sales records
-        const mockAuditRecords: AuditRecord[] = data.map((sale: any, index: number) => ({
-          id: `audit-${index}`,
-          sale_id: sale.transno || `SALE-${index}`,
-          action: ['ADDED', 'EDITED', 'DELETED'][Math.floor(Math.random() * 3)] as 'ADDED' | 'EDITED' | 'DELETED',
-          user_id: 'mock-user-id',
-          username: 'Mock User',
-          timestamp: new Date().toISOString(),
-        }));
+        // For now, create mock audit data that matches your image
+        const mockAuditRecords: AuditRecord[] = [
+          {
+            id: 'audit-1',
+            sale_id: 'TR0001',
+            action: 'EDITED',
+            user_id: 'user-1',
+            username: 'Juan Dela Cruz',
+            timestamp: '2025-05-08 13:00 PM'
+          },
+          {
+            id: 'audit-2',
+            sale_id: 'TR0002',
+            action: 'DELETED',
+            user_id: 'user-2',
+            username: 'Jerry Esperanza',
+            timestamp: '2025-05-08 11:33 AM'
+          },
+          {
+            id: 'audit-3',
+            sale_id: 'TR0003',
+            action: 'ADDED',
+            user_id: 'user-1',
+            username: 'Juan Dela Cruz',
+            timestamp: '2025-05-08 13:10 PM'
+          },
+        ];
         
         setAuditRecords(mockAuditRecords);
       }
@@ -109,19 +126,6 @@ const AuditTrail: React.FC = () => {
     }
   }
   
-  // Format timestamp to readable date and time
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
-
   // Get badge color based on action
   const getBadgeVariant = (action: string): "default" | "destructive" | "secondary" | "outline" => {
     switch (action) {
@@ -133,6 +137,20 @@ const AuditTrail: React.FC = () => {
         return 'destructive';
       default:
         return 'default';
+    }
+  };
+
+  // Render status with appropriate styling based on action
+  const renderStatus = (action: string) => {
+    switch (action) {
+      case 'ADDED':
+        return <span className="text-green-600 font-medium">{action}</span>;
+      case 'EDITED':
+        return <span className="text-blue-600 font-medium">{action}</span>;
+      case 'DELETED':
+        return <span className="text-red-600 font-medium">{action}</span>;
+      default:
+        return <span>{action}</span>;
     }
   };
 
@@ -154,7 +172,7 @@ const AuditTrail: React.FC = () => {
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
-                  <TableHead className="bg-background sticky top-0 z-20">Sales Trans. No</TableHead>
+                  <TableHead className="bg-background sticky top-0 z-20">SalesTrans</TableHead>
                   {isAdmin && (
                     <>
                       <TableHead className="bg-background sticky top-0 z-20">Status</TableHead>
@@ -183,15 +201,13 @@ const AuditTrail: React.FC = () => {
                       {isAdmin && (
                         <>
                           <TableCell>
-                            <Badge variant={getBadgeVariant(record.action)}>
-                              {record.action}
-                            </Badge>
+                            {renderStatus(record.action)}
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col">
                               <span className="font-medium">{record.username}</span>
                               <span className="text-sm text-gray-500">
-                                {formatTimestamp(record.timestamp)}
+                                {record.timestamp}
                               </span>
                             </div>
                           </TableCell>
