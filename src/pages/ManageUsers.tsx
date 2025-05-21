@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Shield, Ban, ShieldCheck } from "lucide-react";
+import { ChevronDown, Shield, Ban, ShieldCheck, ToggleLeft, ToggleRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
+import { Toggle } from "@/components/ui/toggle";
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -486,20 +486,19 @@ const ManageUsers: React.FC = () => {
                     </TableHead>
                   ))}
                   <TableHead className="bg-background sticky top-0 z-20">Role</TableHead>
-                  <TableHead className="bg-background sticky top-0 z-20">Status</TableHead>
                   <TableHead className="bg-background sticky top-0 z-20">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-10">
+                    <TableCell colSpan={9} className="text-center py-10">
                       Loading users...
                     </TableCell>
                   </TableRow>
                 ) : users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-10">
+                    <TableCell colSpan={9} className="text-center py-10">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -516,15 +515,43 @@ const ManageUsers: React.FC = () => {
                       {displayColumns.map(key => (
                         <TableCell key={`${user.id}-${key}`}>
                           {isAdmin ? (
-                            <Switch
-                              checked={user.permissions[key as keyof UserPermissions] || false}
-                              onCheckedChange={(checked) => updatePermission(user.id, key as keyof UserPermissions, checked)}
-                              className={user.permissions[key as keyof UserPermissions] ? "bg-blue-500 data-[state=checked]:bg-blue-500" : ""}
+                            <Toggle
+                              pressed={user.permissions[key as keyof UserPermissions] || false}
+                              onPressedChange={(checked) => updatePermission(user.id, key as keyof UserPermissions, checked)}
                               disabled={user.isBlocked}
-                            />
+                              className="w-[80px] justify-center"
+                              variant="outline"
+                            >
+                              {user.permissions[key as keyof UserPermissions] ? (
+                                <div className="flex items-center text-blue-500 font-medium">
+                                  <ToggleRight className="h-4 w-4 mr-1" />
+                                  TRUE
+                                </div>
+                              ) : (
+                                <div className="flex items-center text-gray-500 font-medium">
+                                  <ToggleLeft className="h-4 w-4 mr-1" />
+                                  FALSE
+                                </div>
+                              )}
+                            </Toggle>
                           ) : (
-                            <div className={`px-3 py-2 border rounded ${user.permissions[key as keyof UserPermissions] ? 'bg-blue-500 text-white' : ''}`}>
-                              {user.permissions[key as keyof UserPermissions] ? 'True' : 'False'}
+                            <div 
+                              className={`px-3 py-2 rounded flex items-center justify-center w-[80px] font-medium
+                                ${user.permissions[key as keyof UserPermissions] 
+                                  ? 'text-blue-500' 
+                                  : 'text-gray-500'}`}
+                            >
+                              {user.permissions[key as keyof UserPermissions] ? (
+                                <>
+                                  <ToggleRight className="h-4 w-4 mr-1" />
+                                  TRUE
+                                </>
+                              ) : (
+                                <>
+                                  <ToggleLeft className="h-4 w-4 mr-1" />
+                                  FALSE
+                                </>
+                              )}
                             </div>
                           )}
                         </TableCell>
@@ -548,13 +575,6 @@ const ManageUsers: React.FC = () => {
                           <Badge variant={user.isAdmin ? 'default' : 'outline'} className={user.isAdmin ? 'bg-blue-500' : ''}>
                             {user.isAdmin ? 'Admin' : 'User'}
                           </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {user.isBlocked ? (
-                          <Badge variant="destructive">Blocked</Badge>
-                        ) : (
-                          <Badge variant="outline">Active</Badge>
                         )}
                       </TableCell>
                       <TableCell>
