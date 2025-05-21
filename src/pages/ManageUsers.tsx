@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -160,7 +159,7 @@ const ManageUsers: React.FC = () => {
     fetchUsers();
   }, [toast]);
 
-  // Function to update user permissions - modified to handle RLS requirements
+  // Function to update user permissions - using Edge Function to bypass RLS
   const updatePermission = async (userId: string, permission: keyof UserPermissions, value: boolean) => {
     if (!isAdmin) {
       toast({
@@ -193,85 +192,62 @@ const ManageUsers: React.FC = () => {
       
       console.log("Updated permissions object:", updatedPermissions);
 
-      // Use RPC function call or update user_permissions table instead of profiles
-      // This avoids the RLS policy violation
-      const { data: existingUserPermission, error: checkError } = await supabase
-        .from('user_permissions')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (checkError && checkError.code !== 'PGRST116') {  // PGRST116 is 'not found'
-        console.error('Error checking user permissions:', checkError);
-        throw checkError;
-      }
-
-      let updateResult;
+      // Update user_permissions table first
+      const columnMapping: Record<string, string> = {
+        editSales: 'edit_sales',
+        addSale: 'add_sales',
+        deleteSale: 'delete_sales',
+        editSalesDetail: 'edit_sales_detail',
+        addSalesDetail: 'add_sales_detail',
+        deleteSalesDetail: 'delete_sales_detail'
+      };
       
-      // If permission record doesn't exist, create it
-      if (!existingUserPermission) {
-        console.log("User permission doesn't exist, creating one");
-        // Convert permission object properties to specific columns
-        updateResult = await supabase
-          .from('user_permissions')
-          .insert({
-            user_id: userId,
-            edit_sales: updatedPermissions.editSales,
-            add_sales: updatedPermissions.addSale,
-            delete_sales: updatedPermissions.deleteSale,
-            edit_sales_detail: updatedPermissions.editSalesDetail,
-            add_sales_detail: updatedPermissions.addSalesDetail,
-            delete_sales_detail: updatedPermissions.deleteSalesDetail
-          });
-      } else {
-        console.log("User permission exists, updating it");
-        // Update the specific permission column only
-        const updateData: Record<string, boolean> = {};
-        
-        // Map permission keys to database column names
-        const columnMapping: Record<string, string> = {
-          editSales: 'edit_sales',
-          addSale: 'add_sales',
-          deleteSale: 'delete_sales',
-          editSalesDetail: 'edit_sales_detail',
-          addSalesDetail: 'add_sales_detail',
-          deleteSalesDetail: 'delete_sales_detail'
-        };
-        
-        // Set only the column that needs to be updated
-        updateData[columnMapping[permission] || permission] = value;
-        
-        updateResult = await supabase
-          .from('user_permissions')
-          .update(updateData)
-          .eq('user_id', userId);
+      // Map the permission to the correct column name
+      const columnName = columnMapping[permission] || permission;
+      const updateData: Record<string, boolean> = {};
+      updateData[columnName] = value;
+      
+      // Update the specific permission column in user_permissions table
+      const { error: permissionError } = await supabase
+        .from('user_permissions')
+        .upsert({ 
+          user_id: userId,
+          [columnName]: value
+        }, { 
+          onConflict: 'user_id',
+          ignoreDuplicates: false
+        });
+
+      if (permissionError) {
+        console.error('Error updating permission in user_permissions:', permissionError);
+        throw permissionError;
       }
 
-      if (updateResult.error) {
-        console.error('Error updating permission:', updateResult.error);
-        throw updateResult.error;
+      // Get current session for the token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("No active session found");
       }
-
-      // Also update profiles table to maintain backward compatibility
-      // This might be the part failing due to RLS policies
-      try {
-        // First get the current profile
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
-          
-        // If profile exists, update its permissions field
-        if (profile) {
-          await supabase.rpc('update_profile_permissions', {
+      
+      // Call the edge function to update profile permissions
+      const response = await fetch(
+        'https://unixmerhujdxfsikiekp.supabase.co/functions/v1/update-profile-permissions',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
             user_id: userId,
-            permissions_json: updatedPermissions
-          });
+            permissions: updatedPermissions
+          })
         }
-      } catch (profileError) {
-        console.warn('Could not update profiles table, but user_permissions was updated:', profileError);
-        // Not throwing error here as we still updated the main user_permissions table
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update permissions');
       }
 
       // Update local state
