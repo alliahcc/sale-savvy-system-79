@@ -15,9 +15,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
-import { PlusIcon, Loader2, Pencil, Trash2, Save } from 'lucide-react';
+import { PlusIcon, Loader2, Pencil, Trash2, Save, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface SaleWithDetails {
   id: string;
@@ -101,6 +102,22 @@ const Sales: React.FC = () => {
   });
 
   const [salesData, setSalesData] = useState<SaleWithDetails[]>([]);
+  
+  // User permissions state
+  const [userPermissions, setUserPermissions] = useState({
+    addSale: false,
+    editSales: false,
+    deleteSale: false,
+    addSalesDetail: false,
+    editSalesDetail: false,
+    deleteSalesDetail: false
+  });
+  
+  // Permission denied alert state
+  const [permissionAlert, setPermissionAlert] = useState({
+    show: false,
+    message: ""
+  });
 
   const filteredCustomers = customers.filter(customer => 
     customer.custname?.toLowerCase().startsWith(customerSearch.toLowerCase())
@@ -113,6 +130,58 @@ const Sales: React.FC = () => {
   const filteredProducts = products.filter(product => 
     product.description?.toLowerCase().startsWith(productSearch.toLowerCase())
   );
+
+  // Fetch user permissions
+  useEffect(() => {
+    const fetchUserPermissions = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          // Check if user is admin first (admins have all permissions)
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('is_admin, permissions')
+            .eq('id', user.id)
+            .single();
+          
+          if (profileError) {
+            console.error('Error fetching user profile:', profileError);
+            return;
+          }
+          
+          // If user is admin, grant all permissions
+          if (profileData?.is_admin) {
+            setUserPermissions({
+              addSale: true,
+              editSales: true,
+              deleteSale: true,
+              addSalesDetail: true,
+              editSalesDetail: true,
+              deleteSalesDetail: true
+            });
+            return;
+          }
+          
+          // Otherwise use the permissions from profile
+          if (profileData?.permissions) {
+            setUserPermissions({
+              addSale: profileData.permissions.addSale || false,
+              editSales: profileData.permissions.editSales || false,
+              deleteSale: profileData.permissions.deleteSale || false,
+              addSalesDetail: profileData.permissions.addSalesDetail || false,
+              editSalesDetail: profileData.permissions.editSalesDetail || false,
+              deleteSalesDetail: profileData.permissions.deleteSalesDetail || false
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user permissions:', error);
+      }
+    };
+    
+    fetchUserPermissions();
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -491,6 +560,14 @@ const Sales: React.FC = () => {
   };
 
   const handleEditSale = async (id: string) => {
+    if (!userPermissions.editSales) {
+      setPermissionAlert({
+        show: true,
+        message: "You don't have permission to edit sales."
+      });
+      return;
+    }
+    
     try {
       const sale = salesData.find(sale => sale.id === id);
       if (!sale) {
@@ -558,6 +635,14 @@ const Sales: React.FC = () => {
   };
 
   const handleDeleteSale = async (id: string) => {
+    if (!userPermissions.deleteSale) {
+      setPermissionAlert({
+        show: true,
+        message: "You don't have permission to delete sales."
+      });
+      return;
+    }
+    
     if (window.confirm('Are you sure you want to delete this sale?')) {
       try {
         const { error: deleteDetailError } = await supabase
@@ -592,6 +677,14 @@ const Sales: React.FC = () => {
   };
 
   const handleNewSaleOpen = () => {
+    if (!userPermissions.addSale) {
+      setPermissionAlert({
+        show: true,
+        message: "You don't have permission to add new sales."
+      });
+      return;
+    }
+    
     setIsNewSaleDialogOpen(true);
   };
   
@@ -891,10 +984,28 @@ const Sales: React.FC = () => {
     <div className="space-y-6 animate-fadeIn">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">Sales</h2>
-        <Button onClick={handleNewSaleOpen}>
+        <Button onClick={handleNewSaleOpen} disabled={!userPermissions.addSale}>
           <PlusIcon className="mr-2 h-4 w-4" /> New Sale
         </Button>
       </div>
+      
+      {permissionAlert.show && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Permission Denied</AlertTitle>
+          <AlertDescription>
+            {permissionAlert.message}
+          </AlertDescription>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="ml-auto" 
+            onClick={() => setPermissionAlert({ show: false, message: "" })}
+          >
+            Dismiss
+          </Button>
+        </Alert>
+      )}
       
       <Card>
         <CardHeader>
@@ -956,6 +1067,7 @@ const Sales: React.FC = () => {
                                 variant="ghost" 
                                 size="icon"
                                 onClick={() => handleEditSale(sale.id)}
+                                disabled={!userPermissions.editSales}
                               >
                                 <Pencil className="h-4 w-4 text-blue-500" />
                               </Button>
@@ -963,6 +1075,7 @@ const Sales: React.FC = () => {
                                 variant="ghost" 
                                 size="icon"
                                 onClick={() => handleDeleteSale(sale.id)}
+                                disabled={!userPermissions.deleteSale}
                               >
                                 <Trash2 className="h-4 w-4 text-red-500" />
                               </Button>
