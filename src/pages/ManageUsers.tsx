@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Shield } from "lucide-react";
+import { ChevronDown, Shield, Ban, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
@@ -28,6 +28,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle 
+} from "@/components/ui/alert-dialog";
 
 // Define types
 type UserPermissions = {
@@ -63,6 +75,7 @@ interface User {
   permissions: UserPermissions;
   index: number;
   email?: string;
+  isBlocked?: boolean;
 }
 
 const ManageUsers: React.FC = () => {
@@ -71,6 +84,8 @@ const ManageUsers: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
+  const [userToBlock, setUserToBlock] = useState<User | null>(null);
 
   // Fetch users from Supabase Edge Function
   useEffect(() => {
@@ -138,21 +153,29 @@ const ManageUsers: React.FC = () => {
           
           const authUsers = await response.json();
           
+          // Get all user permissions
+          const { data: permissions } = await supabase
+            .from('user_permissions')
+            .select('*');
+
           // Process users
           const processedUsers: User[] = [];
           let index = 1;
           
           for (const authUser of authUsers) {
+            // Find user permissions if available
+            const userPermission = permissions?.find(p => p.user_id === authUser.id);
             // Get permissions from profile or set defaults
-            const permissions = authUser.profile?.permissions as UserPermissions || DEFAULT_PERMISSIONS;
+            const permissionsFromProfile = authUser.profile?.permissions as UserPermissions || DEFAULT_PERMISSIONS;
             
             processedUsers.push({
               id: authUser.id,
               username: authUser.username,
               isAdmin: authUser.isAdmin,
-              permissions: permissions,
+              permissions: permissionsFromProfile,
               index: index++,
-              email: authUser.email
+              email: authUser.email,
+              isBlocked: userPermission?.isBlocked || false
             });
           }
           
@@ -185,8 +208,6 @@ const ManageUsers: React.FC = () => {
     }
 
     try {
-      console.log("Updating permission:", userId, permission, value);
-      
       // Find the user to update
       const userToUpdate = users.find(user => user.id === userId);
       if (!userToUpdate) {
@@ -204,8 +225,6 @@ const ManageUsers: React.FC = () => {
         [permission]: value
       };
       
-      console.log("Updated permissions object:", updatedPermissions);
-
       // Get current session for the token
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -285,8 +304,8 @@ const ManageUsers: React.FC = () => {
         throw new Error("No active session found");
       }
 
-      // We need to bypass RLS for this update because normal users can't update others' profiles
-      const updateResponse = await fetch(
+      // Call the edge function to update user type
+      const response = await fetch(
         'https://unixmerhujdxfsikiekp.supabase.co/functions/v1/update-profile-permissions',
         {
           method: 'POST',
@@ -296,14 +315,13 @@ const ManageUsers: React.FC = () => {
           },
           body: JSON.stringify({
             user_id: userId,
-            permissions: userToUpdate.permissions,
             is_admin: isAdminValue
           })
         }
       );
 
-      if (!updateResponse.ok) {
-        const errorData = await updateResponse.json();
+      if (!response.ok) {
+        const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to update user type');
       }
       
@@ -317,7 +335,7 @@ const ManageUsers: React.FC = () => {
       );
       
       toast({
-        title: "User Type Updated",
+        title: "User Role Updated",
         description: `User ${userToUpdate.username} is now ${isAdminValue ? 'an Admin' : 'a User'}`,
       });
     } catch (error: any) {
@@ -325,6 +343,81 @@ const ManageUsers: React.FC = () => {
       toast({
         title: "Error",
         description: `Failed to update user type: ${error.message || "Unknown error"}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Function to toggle user blocked status
+  const toggleBlockUser = async (confirm = false) => {
+    if (!userToBlock) return;
+    
+    if (!confirm) {
+      setBlockDialogOpen(true);
+      return;
+    }
+    
+    setBlockDialogOpen(false);
+    
+    if (!isAdmin || userToBlock.id === currentUserId) {
+      toast({
+        title: "Permission Denied",
+        description: "You cannot block yourself or you don't have admin rights.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Get current session for the token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("No active session found");
+      }
+
+      const newBlockedStatus = !userToBlock.isBlocked;
+      
+      // Call the edge function to update block status
+      const response = await fetch(
+        'https://unixmerhujdxfsikiekp.supabase.co/functions/v1/update-profile-permissions',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            user_id: userToBlock.id,
+            isBlocked: newBlockedStatus
+          })
+        }
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update block status');
+      }
+
+      // Update local state
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userToBlock.id 
+            ? { ...user, isBlocked: newBlockedStatus } 
+            : user
+        )
+      );
+      
+      toast({
+        title: newBlockedStatus ? "User Blocked" : "User Unblocked",
+        description: `${userToBlock.username} has been ${newBlockedStatus ? 'blocked' : 'unblocked'}`
+      });
+      
+      setUserToBlock(null);
+    } catch (error: any) {
+      console.error('Error updating block status:', error);
+      toast({
+        title: "Error",
+        description: `Failed to update block status: ${error.message || "Unknown error"}`,
         variant: "destructive",
       });
     }
@@ -338,26 +431,6 @@ const ManageUsers: React.FC = () => {
       .slice(0, 2)
       .join('');
   };
-
-  // Component for permission toggle dropdown
-  const PermissionToggle = ({ userId, permission, value }: { userId: string, permission: keyof UserPermissions, value: boolean }) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="w-24 justify-between">
-          {value ? 'True' : 'False'}
-          <ChevronDown className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuItem onClick={() => updatePermission(userId, permission, true)}>
-          True
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => updatePermission(userId, permission, false)}>
-          False
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 
   // Reordered display columns as shown in the image
   const displayColumns = [
@@ -413,25 +486,26 @@ const ManageUsers: React.FC = () => {
                     </TableHead>
                   ))}
                   <TableHead className="bg-background sticky top-0 z-20">Role</TableHead>
+                  <TableHead className="bg-background sticky top-0 z-20">Status</TableHead>
                   <TableHead className="bg-background sticky top-0 z-20">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-10">
+                    <TableCell colSpan={10} className="text-center py-10">
                       Loading users...
                     </TableCell>
                   </TableRow>
                 ) : users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-10">
+                    <TableCell colSpan={10} className="text-center py-10">
                       No users found
                     </TableCell>
                   </TableRow>
                 ) : (
                   users.map((user) => (
-                    <TableRow key={user.id}>
+                    <TableRow key={user.id} className={user.isBlocked ? "bg-gray-50" : ""}>
                       <TableCell>{user.index}</TableCell>
                       <TableCell className="flex items-center gap-3">
                         <Avatar>
@@ -442,13 +516,14 @@ const ManageUsers: React.FC = () => {
                       {displayColumns.map(key => (
                         <TableCell key={`${user.id}-${key}`}>
                           {isAdmin ? (
-                            <PermissionToggle 
-                              userId={user.id} 
-                              permission={key as keyof UserPermissions} 
-                              value={user.permissions[key as keyof UserPermissions] || false} 
+                            <Switch
+                              checked={user.permissions[key as keyof UserPermissions] || false}
+                              onCheckedChange={(checked) => updatePermission(user.id, key as keyof UserPermissions, checked)}
+                              className={user.permissions[key as keyof UserPermissions] ? "bg-blue-500 data-[state=checked]:bg-blue-500" : ""}
+                              disabled={user.isBlocked}
                             />
                           ) : (
-                            <div className="px-3 py-2 border rounded">
+                            <div className={`px-3 py-2 border rounded ${user.permissions[key as keyof UserPermissions] ? 'bg-blue-500 text-white' : ''}`}>
                               {user.permissions[key as keyof UserPermissions] ? 'True' : 'False'}
                             </div>
                           )}
@@ -459,8 +534,9 @@ const ManageUsers: React.FC = () => {
                           <Select
                             value={user.isAdmin ? 'admin' : 'user'}
                             onValueChange={(value) => updateUserType(user.id, value === 'admin')}
+                            disabled={user.id === currentUserId || user.isBlocked}
                           >
-                            <SelectTrigger className="w-24">
+                            <SelectTrigger className={`w-24 ${user.isAdmin ? 'bg-blue-500 text-white border-blue-500' : ''}`}>
                               <SelectValue placeholder="Select role" />
                             </SelectTrigger>
                             <SelectContent>
@@ -469,19 +545,40 @@ const ManageUsers: React.FC = () => {
                             </SelectContent>
                           </Select>
                         ) : (
-                          <div className={`text-xs px-2 py-1 rounded-full inline-block ${user.isAdmin ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-700'}`}>
+                          <Badge variant={user.isAdmin ? 'default' : 'outline'} className={user.isAdmin ? 'bg-blue-500' : ''}>
                             {user.isAdmin ? 'Admin' : 'User'}
-                          </div>
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {user.isBlocked ? (
+                          <Badge variant="destructive">Blocked</Badge>
+                        ) : (
+                          <Badge variant="outline">Active</Badge>
                         )}
                       </TableCell>
                       <TableCell>
                         <Button 
                           variant="outline" 
                           size="sm"
-                          className={user.permissions.editEmployees === false ? "opacity-50" : ""}
+                          className={user.isBlocked ? "border-red-500 text-red-500 hover:bg-red-50" : "hover:bg-blue-50"}
+                          onClick={() => {
+                            setUserToBlock(user);
+                            toggleBlockUser(false);
+                          }}
                           disabled={!isAdmin || user.id === currentUserId}
                         >
-                          {user.permissions.editEmployees === false ? "Block" : "Block"}
+                          {user.isBlocked ? (
+                            <>
+                              <ShieldCheck className="h-4 w-4 mr-1" />
+                              Unblock
+                            </>
+                          ) : (
+                            <>
+                              <Ban className="h-4 w-4 mr-1" />
+                              Block
+                            </>
+                          )}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -492,6 +589,33 @@ const ManageUsers: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Block User Confirmation Dialog */}
+      <AlertDialog open={blockDialogOpen} onOpenChange={setBlockDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {userToBlock?.isBlocked 
+                ? `Unblock ${userToBlock?.username}?` 
+                : `Block ${userToBlock?.username}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {userToBlock?.isBlocked 
+                ? "This user will regain access to the system." 
+                : "This user will no longer be able to access the system."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setUserToBlock(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => toggleBlockUser(true)}
+              className={userToBlock?.isBlocked ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
+            >
+              {userToBlock?.isBlocked ? "Unblock" : "Block"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

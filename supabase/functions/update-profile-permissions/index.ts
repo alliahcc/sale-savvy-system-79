@@ -15,11 +15,11 @@ serve(async (req) => {
 
   try {
     // Get request body
-    const { user_id, permissions } = await req.json();
+    const { user_id, permissions, is_admin, isBlocked } = await req.json();
 
-    if (!user_id || !permissions) {
+    if (!user_id) {
       return new Response(
-        JSON.stringify({ error: "User ID and permissions are required" }),
+        JSON.stringify({ error: "User ID is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -64,49 +64,91 @@ serve(async (req) => {
       );
     }
 
-    // Map permissions to user_permissions table format
-    const permissionData = {
-      user_id: user_id,
-      edit_sales: permissions.editSales,
-      add_sales: permissions.addSale,
-      delete_sales: permissions.deleteSale,
-      edit_sales_detail: permissions.editSalesDetail,
-      add_sales_detail: permissions.addSalesDetail,
-      delete_sales_detail: permissions.deleteSalesDetail
-    };
+    // Update operations object
+    const updateOperations = [];
 
-    // Update user_permissions table first, using upsert to handle new or existing records
-    const { error: permissionError } = await supabaseAdmin
-      .from("user_permissions")
-      .upsert(permissionData, { 
-        onConflict: 'user_id' 
-      });
+    // Handle permissions update
+    if (permissions) {
+      // Map permissions to user_permissions table format
+      const permissionData = {
+        user_id: user_id,
+        edit_sales: permissions.editSales,
+        add_sales: permissions.addSale,
+        delete_sales: permissions.deleteSale,
+        edit_sales_detail: permissions.editSalesDetail,
+        add_sales_detail: permissions.addSalesDetail,
+        delete_sales_detail: permissions.deleteSalesDetail
+      };
 
-    if (permissionError) {
-      return new Response(
-        JSON.stringify({ error: `Error updating permissions: ${permissionError.message}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+      // Update user_permissions table first, using upsert to handle new or existing records
+      const { error: permissionError } = await supabaseAdmin
+        .from("user_permissions")
+        .upsert(permissionData, { 
+          onConflict: 'user_id' 
+        });
 
-    // Update the profile with permissions, bypassing RLS
-    const { data, error } = await supabaseAdmin
-      .from("profiles")
-      .update({ 
+      if (permissionError) {
+        return new Response(
+          JSON.stringify({ error: `Error updating permissions: ${permissionError.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Update the profile with permissions
+      updateOperations.push({
         permissions,
         updated_at: new Date().toISOString()
-      })
-      .eq("id", user_id);
+      });
+    }
 
-    if (error) {
-      return new Response(
-        JSON.stringify({ error: error.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Handle admin status update if provided
+    if (is_admin !== undefined) {
+      updateOperations.push({
+        is_admin,
+        updated_at: new Date().toISOString()
+      });
+    }
+
+    // Handle blocked status update if provided
+    if (isBlocked !== undefined) {
+      // Update user_permissions table with blocked status
+      const { error: blockError } = await supabaseAdmin
+        .from("user_permissions")
+        .upsert({
+          user_id: user_id,
+          isBlocked: isBlocked
+        }, { 
+          onConflict: 'user_id' 
+        });
+
+      if (blockError) {
+        return new Response(
+          JSON.stringify({ error: `Error updating block status: ${blockError.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Merge all update operations
+    const mergedUpdates = Object.assign({}, ...updateOperations);
+    
+    if (Object.keys(mergedUpdates).length > 0) {
+      // Update the profile with all changes, bypassing RLS
+      const { data, error } = await supabaseAdmin
+        .from("profiles")
+        .update(mergedUpdates)
+        .eq("id", user_id);
+
+      if (error) {
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     return new Response(
-      JSON.stringify({ message: "Profile updated successfully", data }),
+      JSON.stringify({ message: "User updated successfully" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

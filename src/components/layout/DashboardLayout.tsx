@@ -27,6 +27,7 @@ const DashboardLayout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
   
   useEffect(() => {
     // Get current user
@@ -34,8 +35,30 @@ const DashboardLayout: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
       
-      // Check if user is admin
       if (user) {
+        // Check if user is blocked
+        const { data: permissions } = await supabase
+          .from('user_permissions')
+          .select('isBlocked')
+          .eq('user_id', user.id)
+          .single();
+          
+        if (permissions?.isBlocked) {
+          setIsBlocked(true);
+          // Show blocked message
+          toast({
+            title: "Account Blocked",
+            description: "Your account has been blocked. Please contact an administrator.",
+            variant: "destructive",
+          });
+          
+          // Sign out the blocked user
+          await supabase.auth.signOut();
+          navigate('/');
+          return;
+        }
+        
+        // Check if user is admin
         // First check default admin email
         if (user.email === "alliahalexis.cinco@neu.edu.ph") {
           setIsAdmin(true);
@@ -66,6 +89,28 @@ const DashboardLayout: React.FC = () => {
         } else if (session) {
           setUser(session.user);
           
+          // Check if user is blocked
+          const { data: permissions } = await supabase
+            .from('user_permissions')
+            .select('isBlocked')
+            .eq('user_id', session.user.id)
+            .single();
+            
+          if (permissions?.isBlocked) {
+            setIsBlocked(true);
+            // Show blocked message
+            toast({
+              title: "Account Blocked",
+              description: "Your account has been blocked. Please contact an administrator.",
+              variant: "destructive",
+            });
+            
+            // Sign out the blocked user
+            await supabase.auth.signOut();
+            navigate('/');
+            return;
+          }
+          
           // Check if user is admin
           if (session.user.email === "alliahalexis.cinco@neu.edu.ph") {
             setIsAdmin(true);
@@ -84,7 +129,7 @@ const DashboardLayout: React.FC = () => {
     );
     
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, toast]);
 
   const navigationItems = [
     {
