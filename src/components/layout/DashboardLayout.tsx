@@ -9,7 +9,8 @@ import {
   Menu, 
   X,
   TrendingUp,
-  Shield
+  Shield,
+  ClipboardList
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -146,6 +147,11 @@ const DashboardLayout: React.FC = () => {
       name: 'Employees',
       path: '/employees',
       icon: <Users className="h-5 w-5" />
+    },
+    {
+      name: 'Audit Trail',
+      path: '/audit-trail',
+      icon: <ClipboardList className="h-5 w-5" />
     }
   ];
 
