@@ -64,7 +64,32 @@ serve(async (req) => {
       );
     }
 
-    // Update the profile with admin access, bypassing RLS
+    // Map permissions to user_permissions table format
+    const permissionData = {
+      user_id: user_id,
+      edit_sales: permissions.editSales,
+      add_sales: permissions.addSale,
+      delete_sales: permissions.deleteSale,
+      edit_sales_detail: permissions.editSalesDetail,
+      add_sales_detail: permissions.addSalesDetail,
+      delete_sales_detail: permissions.deleteSalesDetail
+    };
+
+    // Update user_permissions table first, using upsert to handle new or existing records
+    const { error: permissionError } = await supabaseAdmin
+      .from("user_permissions")
+      .upsert(permissionData, { 
+        onConflict: 'user_id' 
+      });
+
+    if (permissionError) {
+      return new Response(
+        JSON.stringify({ error: `Error updating permissions: ${permissionError.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Update the profile with permissions, bypassing RLS
     const { data, error } = await supabaseAdmin
       .from("profiles")
       .update({ 

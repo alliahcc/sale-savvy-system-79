@@ -35,8 +35,23 @@ const DashboardLayout: React.FC = () => {
       setUser(user);
       
       // Check if user is admin
-      if (user && user.email === "alliahalexis.cinco@neu.edu.ph") {
-        setIsAdmin(true);
+      if (user) {
+        // First check default admin email
+        if (user.email === "alliahalexis.cinco@neu.edu.ph") {
+          setIsAdmin(true);
+          return;
+        }
+        
+        // Then check if user has admin flag in profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', user.id)
+          .single();
+        
+        if (profile && profile.is_admin) {
+          setIsAdmin(true);
+        }
       }
     };
     
@@ -44,15 +59,25 @@ const DashboardLayout: React.FC = () => {
     
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         if (event === 'SIGNED_OUT') {
           navigate('/');
+          setIsAdmin(false);
         } else if (session) {
           setUser(session.user);
+          
+          // Check if user is admin
           if (session.user.email === "alliahalexis.cinco@neu.edu.ph") {
             setIsAdmin(true);
           } else {
-            setIsAdmin(false);
+            // Check profile for admin status
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('is_admin')
+              .eq('id', session.user.id)
+              .single();
+            
+            setIsAdmin(profile?.is_admin || false);
           }
         }
       }

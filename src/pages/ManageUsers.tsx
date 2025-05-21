@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -10,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -81,17 +83,29 @@ const ManageUsers: React.FC = () => {
         if (user) {
           setCurrentUserId(user.id);
           
-          // Check if current user is admin
+          // First check if user has admin email
           const isCurrentUserAdmin = user.email === ADMIN_EMAIL;
-          setIsAdmin(isCurrentUserAdmin);
           
           if (!isCurrentUserAdmin) {
-            toast({
-              title: "Access Denied",
-              description: "Only administrators can view this page.",
-              variant: "destructive",
-            });
-            return;
+            // If not default admin email, check if they are an admin in the profile
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('is_admin')
+              .eq('id', user.id)
+              .single();
+              
+            if (profileData && profileData.is_admin) {
+              setIsAdmin(true);
+            } else {
+              toast({
+                title: "Access Denied",
+                description: "Only administrators can view this page.",
+                variant: "destructive",
+              });
+              return;
+            }
+          } else {
+            setIsAdmin(true);
           }
 
           // Get current session for the token
@@ -192,37 +206,6 @@ const ManageUsers: React.FC = () => {
       
       console.log("Updated permissions object:", updatedPermissions);
 
-      // Update user_permissions table first
-      const columnMapping: Record<string, string> = {
-        editSales: 'edit_sales',
-        addSale: 'add_sales',
-        deleteSale: 'delete_sales',
-        editSalesDetail: 'edit_sales_detail',
-        addSalesDetail: 'add_sales_detail',
-        deleteSalesDetail: 'delete_sales_detail'
-      };
-      
-      // Map the permission to the correct column name
-      const columnName = columnMapping[permission] || permission;
-      const updateData: Record<string, boolean> = {};
-      updateData[columnName] = value;
-      
-      // Update the specific permission column in user_permissions table
-      const { error: permissionError } = await supabase
-        .from('user_permissions')
-        .upsert({ 
-          user_id: userId,
-          [columnName]: value
-        }, { 
-          onConflict: 'user_id',
-          ignoreDuplicates: false
-        });
-
-      if (permissionError) {
-        console.error('Error updating permission in user_permissions:', permissionError);
-        throw permissionError;
-      }
-
       // Get current session for the token
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -296,19 +279,32 @@ const ManageUsers: React.FC = () => {
         return;
       }
 
-      // We can't actually change the admin status in the database since this requires
-      // changing the email, but we can store the designation in the profile
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          is_admin: isAdminValue,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', userId);
+      // Get current session for the token to use service role 
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("No active session found");
+      }
 
-      if (error) {
-        console.error('Error updating user type:', error);
-        throw error;
+      // We need to bypass RLS for this update because normal users can't update others' profiles
+      const updateResponse = await fetch(
+        'https://unixmerhujdxfsikiekp.supabase.co/functions/v1/update-profile-permissions',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            permissions: userToUpdate.permissions,
+            is_admin: isAdminValue
+          })
+        }
+      );
+
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json();
+        throw new Error(errorData.error || 'Failed to update user type');
       }
       
       // Update local state
@@ -322,7 +318,7 @@ const ManageUsers: React.FC = () => {
       
       toast({
         title: "User Type Updated",
-        description: `User ${userToUpdate.username} is now shown as a ${isAdminValue ? 'Admin' : 'User'}`,
+        description: `User ${userToUpdate.username} is now ${isAdminValue ? 'an Admin' : 'a User'}`,
       });
     } catch (error: any) {
       console.error('Error updating user type:', error);
