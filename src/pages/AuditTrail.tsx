@@ -29,6 +29,7 @@ const AuditTrail: React.FC = () => {
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchUserData() {
@@ -37,6 +38,9 @@ const AuditTrail: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
         
+        // Set current username for audit purposes
+        setCurrentUser(user.email || user.id);
+        
         // Check if user is admin (default admin email or profile)
         const isDefaultAdmin = user.email === "alliahalexis.cinco@neu.edu.ph";
         
@@ -44,12 +48,18 @@ const AuditTrail: React.FC = () => {
           // Check if user has admin flag in profile
           const { data: profile } = await supabase
             .from('profiles')
-            .select('is_admin')
+            .select('is_admin, full_name')
             .eq('id', user.id)
             .single();
           
-          if (profile && profile.is_admin) {
-            setIsAdmin(true);
+          if (profile) {
+            if (profile.is_admin) {
+              setIsAdmin(true);
+            }
+            // If full_name exists, use it instead of email
+            if (profile.full_name) {
+              setCurrentUser(profile.full_name);
+            }
           }
         } else {
           setIsAdmin(true);
@@ -74,7 +84,10 @@ const AuditTrail: React.FC = () => {
     try {
       setIsLoading(true);
       
-      // Temporarily use a generic type and cast the result
+      // In a real implementation, we would fetch actual audit records from a dedicated table
+      // For now, we'll mock some audit data
+      
+      // This is a placeholder query - in production, you'd query your actual audit_logs table
       const { data, error } = await supabase
         .from('sales')  // Use an existing table as a placeholder
         .select('*')
@@ -84,7 +97,7 @@ const AuditTrail: React.FC = () => {
       
       if (data) {
         // In a real implementation, we would fetch actual audit records
-        // For now, create mock audit data that matches your image
+        // For now, create mock audit data with different users
         const mockAuditRecords: AuditRecord[] = [
           {
             id: 'audit-1',
@@ -99,7 +112,7 @@ const AuditTrail: React.FC = () => {
             sale_id: 'TR0002',
             action: 'DELETED',
             user_id: 'user-2',
-            username: 'Jerry Esperanza',
+            username: 'Kyoo Russ',
             timestamp: '2025-05-08 11:33 AM'
           },
           {
@@ -109,6 +122,22 @@ const AuditTrail: React.FC = () => {
             user_id: 'user-1',
             username: 'Juan Dela Cruz',
             timestamp: '2025-05-08 13:10 PM'
+          },
+          {
+            id: 'audit-4',
+            sale_id: 'TR0004',
+            action: 'ADDED',
+            user_id: 'user-3',
+            username: 'Kyoo Russ',
+            timestamp: '2025-05-08 09:45 AM'
+          },
+          {
+            id: 'audit-5',
+            sale_id: 'TR0005',
+            action: 'DELETED',
+            user_id: 'user-4',
+            username: 'Maria Santos',
+            timestamp: '2025-05-07 16:20 PM'
           },
         ];
         
