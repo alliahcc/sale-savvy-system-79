@@ -345,14 +345,14 @@ const ManageUsers: React.FC = () => {
     </DropdownMenu>
   );
 
-  // Reordered display columns as requested
+  // Reordered display columns as shown in the image
   const displayColumns = [
     "editSales", 
-    "addSale", 
-    "deleteSale",
+    "deleteSale", 
+    "addSale",
     "editSalesDetail", 
-    "addSalesDetail", 
-    "deleteSalesDetail"
+    "deleteSalesDetail", 
+    "addSalesDetail"
   ];
   
   const permissionsLabels: Record<keyof UserPermissions, string> = {
@@ -398,7 +398,8 @@ const ManageUsers: React.FC = () => {
                       {permissionsLabels[key as keyof typeof permissionsLabels]}
                     </TableHead>
                   ))}
-                  <TableHead className="bg-background sticky top-0 z-20">Type</TableHead>
+                  <TableHead className="bg-background sticky top-0 z-20">Role</TableHead>
+                  <TableHead className="bg-background sticky top-0 z-20">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -458,6 +459,16 @@ const ManageUsers: React.FC = () => {
                             {user.isAdmin ? 'Admin' : 'User'}
                           </div>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className={user.permissions.editEmployees === false ? "opacity-50" : ""}
+                          disabled={!isAdmin || user.email === ADMIN_EMAIL}
+                        >
+                          {user.permissions.editEmployees === false ? "Block" : "Block"}
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
