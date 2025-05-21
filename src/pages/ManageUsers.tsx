@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -61,6 +60,7 @@ interface User {
   isAdmin: boolean;
   permissions: UserPermissions;
   index: number;
+  email?: string; // Added email as optional property to fix the TypeScript error
 }
 
 const ManageUsers: React.FC = () => {
@@ -465,7 +465,7 @@ const ManageUsers: React.FC = () => {
                           variant="outline" 
                           size="sm"
                           className={user.permissions.editEmployees === false ? "opacity-50" : ""}
-                          disabled={!isAdmin || user.email === ADMIN_EMAIL}
+                          disabled={!isAdmin || user.id === currentUserId}
                         >
                           {user.permissions.editEmployees === false ? "Block" : "Block"}
                         </Button>
