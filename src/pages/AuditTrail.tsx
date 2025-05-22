@@ -47,6 +47,7 @@ const AuditTrail: React.FC = () => {
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   useEffect(() => {
     async function fetchUserData() {
@@ -61,12 +62,21 @@ const AuditTrail: React.FC = () => {
         // Check if user has profile with full_name
         const { data: profile } = await supabase
           .from('profiles')
-          .select('full_name')
+          .select('full_name, is_admin')
           .eq('id', user.id)
           .single();
         
-        if (profile && profile.full_name) {
-          setCurrentUser(profile.full_name);
+        if (profile) {
+          if (profile.full_name) {
+            setCurrentUser(profile.full_name);
+          }
+          // Set admin status
+          setIsAdmin(profile.is_admin || false);
+        }
+        
+        // Check if user has default admin email
+        if (user.email === "alliahalexis.cinco@neu.edu.ph") {
+          setIsAdmin(true);
         }
       } catch (error: any) {
         console.error('Error fetching user data:', error);
@@ -99,13 +109,13 @@ const AuditTrail: React.FC = () => {
   const getBadgeVariant = (action: string): "default" | "destructive" | "secondary" | "outline" => {
     switch (action) {
       case 'ADDED':
-        return 'secondary';
+        return 'secondary'; // Green for ADDED
       case 'EDITED':
-        return 'outline';
+        return 'default'; // Blue for EDITED (default is blue in our theme)
       case 'DELETED':
-        return 'destructive';
+        return 'destructive'; // Red for DELETED
       default:
-        return 'default';
+        return 'outline';
     }
   };
 
@@ -128,20 +138,24 @@ const AuditTrail: React.FC = () => {
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="bg-background sticky top-0 z-20">SalesTrans</TableHead>
-                  <TableHead className="bg-background sticky top-0 z-20">Status</TableHead>
-                  <TableHead className="bg-background sticky top-0 z-20">Stamp</TableHead>
+                  {isAdmin && (
+                    <>
+                      <TableHead className="bg-background sticky top-0 z-20">Status</TableHead>
+                      <TableHead className="bg-background sticky top-0 z-20">Stamp</TableHead>
+                    </>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-10">
+                    <TableCell colSpan={isAdmin ? 3 : 1} className="text-center py-10">
                       Loading audit trail...
                     </TableCell>
                   </TableRow>
                 ) : auditRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-10">
+                    <TableCell colSpan={isAdmin ? 3 : 1} className="text-center py-10">
                       No audit records found
                     </TableCell>
                   </TableRow>
@@ -149,19 +163,23 @@ const AuditTrail: React.FC = () => {
                   auditRecords.map((record) => (
                     <TableRow key={record.id}>
                       <TableCell>{record.sale_id}</TableCell>
-                      <TableCell>
-                        <Badge variant={getBadgeVariant(record.action)}>
-                          {record.action}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{record.username}</span>
-                          <span className="text-sm text-gray-500">
-                            {record.timestamp}
-                          </span>
-                        </div>
-                      </TableCell>
+                      {isAdmin && (
+                        <>
+                          <TableCell>
+                            <Badge variant={getBadgeVariant(record.action)}>
+                              {record.action}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{record.username}</span>
+                              <span className="text-sm text-gray-500">
+                                {record.timestamp}
+                              </span>
+                            </div>
+                          </TableCell>
+                        </>
+                      )}
                     </TableRow>
                   ))
                 )}
