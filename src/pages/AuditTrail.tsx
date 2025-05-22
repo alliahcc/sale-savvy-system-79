@@ -29,7 +29,7 @@ const AuditTrail: React.FC = () => {
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
-
+  
   useEffect(() => {
     async function fetchUserData() {
       try {
@@ -65,13 +65,30 @@ const AuditTrail: React.FC = () => {
     
     fetchUserData();
     
-    // Set up a subscription to listen for changes in sales
+    // Set up a subscription to listen for changes in sales table
     const salesSubscription = supabase
       .channel('sales-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, () => {
-        console.log('Sales table changed, refreshing audit trail');
-        fetchAuditRecords();
-      })
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'sales' }, 
+        (payload) => {
+          console.log('Sales record added:', payload);
+          handleSalesChange(payload.new, 'ADDED');
+        }
+      )
+      .on('postgres_changes', 
+        { event: 'UPDATE', schema: 'public', table: 'sales' }, 
+        (payload) => {
+          console.log('Sales record updated:', payload);
+          handleSalesChange(payload.new, 'EDITED');
+        }
+      )
+      .on('postgres_changes', 
+        { event: 'DELETE', schema: 'public', table: 'sales' }, 
+        (payload) => {
+          console.log('Sales record deleted:', payload.old);
+          handleSalesChange(payload.old, 'DELETED');
+        }
+      )
       .subscribe();
     
     return () => {
@@ -79,71 +96,48 @@ const AuditTrail: React.FC = () => {
     };
   }, [toast]);
   
-  async function fetchAuditRecords() {
+  // Function to handle sales changes in real-time
+  const handleSalesChange = async (record: any, action: 'ADDED' | 'EDITED' | 'DELETED') => {
     try {
-      setIsLoading(true);
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
       
-      // Since there's no audit_trail table, we'll use the sales table directly
-      // Get data from sales table
-      const { data: salesData, error: salesError } = await supabase
-        .from('sales')
-        .select('transno, salesdate, empno, custno');
+      let username = user.email || user.id;
       
-      if (salesError) throw salesError;
+      // Check if user has profile with full_name
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
       
-      let actionRecords: AuditRecord[] = [];
-      
-      if (salesData) {
-        // Get user profiles for username lookup
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, full_name');
-        
-        // Create a map for quick username lookup
-        const userMap = new Map();
-        if (profilesData) {
-          profilesData.forEach(profile => {
-            userMap.set(profile.id, profile.full_name);
-          });
-        }
-        
-        // Get the current user
-        const { data: { user } } = await supabase.auth.getUser();
-        const currentUsername = user ? (userMap.get(user.id) || user.email || 'Unknown User') : 'Unknown User';
-        
-        // Convert sales records into audit records
-        actionRecords = salesData.map((sale, index) => {
-          // For simplicity, treat all existing records as ADDED
-          // In a production app, you'd want to track actual changes
-          const action: 'ADDED' | 'EDITED' | 'DELETED' = 'ADDED';
-          
-          return {
-            id: `audit-${index}`,
-            sale_id: sale.transno,
-            action,
-            user_id: sale.empno || 'unknown',
-            username: currentUsername,
-            timestamp: new Date(sale.salesdate || Date.now()).toLocaleString()
-          };
-        });
-        
-        // Sort by most recent first (assuming salesdate is the timestamp)
-        actionRecords.sort((a, b) => {
-          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-        });
+      if (profile && profile.full_name) {
+        username = profile.full_name;
       }
       
-      setAuditRecords(actionRecords);
-    } catch (error: any) {
-      console.error('Error fetching audit records:', error);
-      toast({
-        title: "Error",
-        description: `Failed to load audit trail: ${error.message || "Unknown error"}`,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+      // Create new audit record
+      const newAuditRecord: AuditRecord = {
+        id: `${Date.now()}`,
+        sale_id: record.transno,
+        action: action,
+        user_id: user.id,
+        username: username,
+        timestamp: new Date().toLocaleString()
+      };
+      
+      // Update local state with the new record at the beginning of the array (newest first)
+      setAuditRecords(prev => [newAuditRecord, ...prev]);
+    } catch (error) {
+      console.error('Error handling sales change:', error);
     }
+  };
+  
+  async function fetchAuditRecords() {
+    setIsLoading(true);
+    // Initially, there should be no audit records until actions are performed
+    setAuditRecords([]);
+    setIsLoading(false);
   }
   
   // Get badge color based on action
