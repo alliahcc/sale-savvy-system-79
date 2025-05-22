@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -19,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Shield, Ban, ShieldCheck, ToggleLeft, ToggleRight } from "lucide-react";
+import { ChevronDown, Shield, Ban, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
@@ -523,13 +522,11 @@ const ManageUsers: React.FC = () => {
                               variant="outline"
                             >
                               {user.permissions[key as keyof UserPermissions] ? (
-                                <div className="flex items-center text-blue-500 font-medium">
-                                  <ToggleRight className="h-4 w-4 mr-1" />
+                                <div className="text-blue-500 font-medium">
                                   TRUE
                                 </div>
                               ) : (
-                                <div className="flex items-center text-gray-500 font-medium">
-                                  <ToggleLeft className="h-4 w-4 mr-1" />
+                                <div className="text-gray-500 font-medium">
                                   FALSE
                                 </div>
                               )}
@@ -541,17 +538,7 @@ const ManageUsers: React.FC = () => {
                                   ? 'text-blue-500' 
                                   : 'text-gray-500'}`}
                             >
-                              {user.permissions[key as keyof UserPermissions] ? (
-                                <>
-                                  <ToggleRight className="h-4 w-4 mr-1" />
-                                  TRUE
-                                </>
-                              ) : (
-                                <>
-                                  <ToggleLeft className="h-4 w-4 mr-1" />
-                                  FALSE
-                                </>
-                              )}
+                              {user.permissions[key as keyof UserPermissions] ? "TRUE" : "FALSE"}
                             </div>
                           )}
                         </TableCell>

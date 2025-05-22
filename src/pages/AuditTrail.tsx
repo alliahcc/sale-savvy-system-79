@@ -128,7 +128,7 @@ const AuditTrail: React.FC = () => {
   const getBadgeVariant = (action: string): "default" | "destructive" | "secondary" | "outline" => {
     switch (action) {
       case 'ADDED':
-        return 'secondary'; // Green for ADDED
+        return 'secondary'; // Green for ADDED (secondary is green in our theme)
       case 'EDITED':
         return 'default'; // Blue for EDITED (default is blue in our theme)
       case 'DELETED':
