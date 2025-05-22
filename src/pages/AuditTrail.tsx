@@ -24,12 +24,17 @@ interface AuditRecord {
   timestamp: string;
 }
 
+// Storage key for localStorage
+const AUDIT_STORAGE_KEY = 'sales_audit_records';
+
 // Create a global store for audit records that can be accessed across components
 // This will be used by the Sales component to add records when actions are performed
 export const auditStore = {
   records: [] as AuditRecord[],
   addRecord: function(record: AuditRecord) {
     this.records = [record, ...this.records];
+    // Save to localStorage each time a record is added
+    localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(this.records));
     // Trigger any listeners that have been registered
     this.listeners.forEach(listener => listener(this.records));
   },
@@ -39,8 +44,22 @@ export const auditStore = {
     return () => {
       this.listeners = this.listeners.filter(l => l !== listener);
     };
+  },
+  // Initialize records from localStorage on module load
+  init: function() {
+    try {
+      const storedRecords = localStorage.getItem(AUDIT_STORAGE_KEY);
+      if (storedRecords) {
+        this.records = JSON.parse(storedRecords);
+      }
+    } catch (error) {
+      console.error('Failed to load audit records from localStorage:', error);
+    }
   }
 };
+
+// Initialize records from localStorage
+auditStore.init();
 
 const AuditTrail: React.FC = () => {
   const { toast } = useToast();
