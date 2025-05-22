@@ -14,7 +14,7 @@ import { Shield, ClipboardList } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 
-// Define our audit record interface based on the database structure
+// Define our audit record interface for tracking sales changes
 interface AuditRecord {
   id: string;
   sale_id: string;
@@ -28,7 +28,6 @@ const AuditTrail: React.FC = () => {
   const { toast } = useToast();
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,31 +40,18 @@ const AuditTrail: React.FC = () => {
         // Set current username for audit purposes
         setCurrentUser(user.email || user.id);
         
-        // Check if user is admin (default admin email or profile)
-        const isDefaultAdmin = user.email === "alliahalexis.cinco@neu.edu.ph";
+        // Check if user has profile with full_name
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .single();
         
-        if (!isDefaultAdmin) {
-          // Check if user has admin flag in profile
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('is_admin, full_name')
-            .eq('id', user.id)
-            .single();
-          
-          if (profile) {
-            if (profile.is_admin) {
-              setIsAdmin(true);
-            }
-            // If full_name exists, use it instead of email
-            if (profile.full_name) {
-              setCurrentUser(profile.full_name);
-            }
-          }
-        } else {
-          setIsAdmin(true);
+        if (profile && profile.full_name) {
+          setCurrentUser(profile.full_name);
         }
         
-        // Fetch audit records
+        // Fetch sales records to use as audit trail
         await fetchAuditRecords();
       } catch (error: any) {
         console.error('Error fetching user data:', error);
@@ -97,100 +83,54 @@ const AuditTrail: React.FC = () => {
     try {
       setIsLoading(true);
       
-      // Create a proper audit_trail table in Supabase if it doesn't exist yet
-      // For this example, we'll query a view that combines sales data with actions
+      // Since there's no audit_trail table, we'll use the sales table directly
+      // Get data from sales table
+      const { data: salesData, error: salesError } = await supabase
+        .from('sales')
+        .select('transno, salesdate, empno, custno');
       
-      // First, check if audit_trail table exists, if not we'll use sales table data
-      const { data: auditTable, error: auditTableError } = await supabase
-        .from('audit_trail')
-        .select('*')
-        .limit(1)
-        .maybeSingle();
-      
-      if (auditTableError && auditTableError.code !== 'PGRST116') {
-        // If error is not "relation does not exist", it's a different error
-        throw auditTableError;
-      }
+      if (salesError) throw salesError;
       
       let actionRecords: AuditRecord[] = [];
       
-      // If audit_trail exists, use that table
-      if (!auditTableError) {
-        const { data, error } = await supabase
-          .from('audit_trail')
-          .select('id, sale_id, action, user_id, username, timestamp')
-          .order('timestamp', { ascending: false });
+      if (salesData) {
+        // Get user profiles for username lookup
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, full_name');
         
-        if (error) throw error;
-        
-        if (data) {
-          actionRecords = data.map(record => ({
-            id: record.id,
-            sale_id: record.sale_id,
-            action: record.action as 'ADDED' | 'EDITED' | 'DELETED',
-            user_id: record.user_id,
-            username: record.username,
-            timestamp: record.timestamp
-          }));
-        }
-      } else {
-        // Get changes from sales and salesdetail tables
-        // Get initial data from sales table
-        const { data: salesData, error: salesError } = await supabase
-          .from('sales')
-          .select('transno, created_at, updated_at')
-          .order('updated_at', { ascending: false });
-        
-        if (salesError) throw salesError;
-        
-        if (salesData) {
-          const { data: profilesData } = await supabase
-            .from('profiles')
-            .select('id, full_name');
-          
-          // Create a map for quick username lookup
-          const userMap = new Map();
-          if (profilesData) {
-            profilesData.forEach(profile => {
-              userMap.set(profile.id, profile.full_name);
-            });
-          }
-          
-          // Get the current user
-          const { data: { user } } = await supabase.auth.getUser();
-          const currentUsername = userMap.get(user?.id) || user?.email || 'Unknown User';
-          
-          // Find deleted sales (would need to be tracked separately in a real app)
-          // Here we're just using the sales table data
-          
-          // Extract actions from sales records based on timestamps
-          let lastActionTime: Date | null = null;
-          
-          actionRecords = salesData.map((sale, index) => {
-            const saleCreatedAt = new Date(sale.created_at);
-            const saleUpdatedAt = new Date(sale.updated_at);
-            
-            // Determine if this was created or updated
-            // In a real app, you'd have separate records for each action
-            let action: 'ADDED' | 'EDITED' | 'DELETED' = 'ADDED';
-            let timestamp = sale.created_at;
-            
-            if (Math.abs(saleCreatedAt.getTime() - saleUpdatedAt.getTime()) > 1000) {
-              // If updated_at is more than 1 second after created_at, consider it edited
-              action = 'EDITED';
-              timestamp = sale.updated_at;
-            }
-            
-            return {
-              id: `audit-${index}`,
-              sale_id: sale.transno,
-              action,
-              user_id: user?.id || 'unknown',
-              username: currentUsername,
-              timestamp: new Date(timestamp).toLocaleString()
-            };
+        // Create a map for quick username lookup
+        const userMap = new Map();
+        if (profilesData) {
+          profilesData.forEach(profile => {
+            userMap.set(profile.id, profile.full_name);
           });
         }
+        
+        // Get the current user
+        const { data: { user } } = await supabase.auth.getUser();
+        const currentUsername = user ? (userMap.get(user.id) || user.email || 'Unknown User') : 'Unknown User';
+        
+        // Convert sales records into audit records
+        actionRecords = salesData.map((sale, index) => {
+          // For simplicity, treat all existing records as ADDED
+          // In a production app, you'd want to track actual changes
+          const action: 'ADDED' | 'EDITED' | 'DELETED' = 'ADDED';
+          
+          return {
+            id: `audit-${index}`,
+            sale_id: sale.transno,
+            action,
+            user_id: sale.empno || 'unknown',
+            username: currentUsername,
+            timestamp: new Date(sale.salesdate || Date.now()).toLocaleString()
+          };
+        });
+        
+        // Sort by most recent first (assuming salesdate is the timestamp)
+        actionRecords.sort((a, b) => {
+          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+        });
       }
       
       setAuditRecords(actionRecords);
@@ -217,20 +157,6 @@ const AuditTrail: React.FC = () => {
         return 'destructive';
       default:
         return 'default';
-    }
-  };
-
-  // Render status with appropriate styling based on action
-  const renderStatus = (action: string) => {
-    switch (action) {
-      case 'ADDED':
-        return <span className="text-green-600 font-medium">{action}</span>;
-      case 'EDITED':
-        return <span className="text-blue-600 font-medium">{action}</span>;
-      case 'DELETED':
-        return <span className="text-red-600 font-medium">{action}</span>;
-      default:
-        return <span>{action}</span>;
     }
   };
 
