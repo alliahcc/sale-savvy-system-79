@@ -19,6 +19,7 @@ import { PlusIcon, Loader2, Pencil, Trash2, Save, AlertCircle } from 'lucide-rea
 import { supabase } from '@/integrations/supabase/client';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { auditStore } from './AuditTrail'; // Import the audit store
 
 interface SaleWithDetails {
   id: string;
@@ -659,6 +660,9 @@ const Sales: React.FC = () => {
     
     if (window.confirm('Are you sure you want to delete this sale?')) {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const username = await getUserDisplayName(user);
+        
         const { error: deleteDetailError } = await supabase
           .from('salesdetail')
           .delete()
@@ -674,6 +678,16 @@ const Sales: React.FC = () => {
         if (deleteSaleError) throw deleteSaleError;
 
         setSalesData(prev => prev.filter(sale => sale.id !== id));
+        
+        // Add audit record
+        auditStore.addRecord({
+          id: Date.now().toString(),
+          sale_id: id,
+          action: 'DELETED',
+          user_id: user?.id || 'unknown',
+          username: username,
+          timestamp: new Date().toLocaleString()
+        });
         
         toast({
           title: "Sale deleted",
@@ -791,6 +805,9 @@ const Sales: React.FC = () => {
     try {
       setSavingOrder(true);
       
+      const { data: { user } } = await supabase.auth.getUser();
+      const username = await getUserDisplayName(user);
+      
       const { error: updateSaleError } = await supabase
         .from('sales')
         .update({
@@ -850,6 +867,16 @@ const Sales: React.FC = () => {
         );
       });
       
+      // Add audit record
+      auditStore.addRecord({
+        id: Date.now().toString(),
+        sale_id: editSale.id,
+        action: 'EDITED',
+        user_id: user?.id || 'unknown',
+        username: username,
+        timestamp: new Date().toLocaleString()
+      });
+      
       toast({
         title: "Sale updated",
         description: `Sale ${editSale.id} has been updated successfully`,
@@ -866,6 +893,25 @@ const Sales: React.FC = () => {
     } finally {
       setSavingOrder(false);
     }
+  };
+  
+  const getUserDisplayName = async (user: any) => {
+    if (!user) return 'Unknown User';
+    
+    let username = user.email || user.id;
+    
+    // Check if user has profile with full_name
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .single();
+    
+    if (profile && profile.full_name) {
+      username = profile.full_name;
+    }
+    
+    return username;
   };
   
   const handleNewSaleSubmit = async () => {
@@ -898,6 +944,9 @@ const Sales: React.FC = () => {
 
     try {
       setSavingOrder(true);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      const username = await getUserDisplayName(user);
       
       const { data: latestSale, error: fetchError } = await supabase
         .from('sales')
@@ -949,6 +998,16 @@ const Sales: React.FC = () => {
       }
       
       console.log("All sale details added successfully");
+      
+      // Add audit record
+      auditStore.addRecord({
+        id: Date.now().toString(),
+        sale_id: nextTransNo,
+        action: 'ADDED',
+        user_id: user?.id || 'unknown',
+        username: username,
+        timestamp: new Date().toLocaleString()
+      });
       
       toast({
         title: "Sale created",

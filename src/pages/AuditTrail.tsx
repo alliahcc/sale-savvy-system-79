@@ -24,6 +24,24 @@ interface AuditRecord {
   timestamp: string;
 }
 
+// Create a global store for audit records that can be accessed across components
+// This will be used by the Sales component to add records when actions are performed
+export const auditStore = {
+  records: [] as AuditRecord[],
+  addRecord: function(record: AuditRecord) {
+    this.records = [record, ...this.records];
+    // Trigger any listeners that have been registered
+    this.listeners.forEach(listener => listener(this.records));
+  },
+  listeners: [] as ((records: AuditRecord[]) => void)[],
+  subscribe: function(listener: (records: AuditRecord[]) => void) {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
+  }
+};
+
 const AuditTrail: React.FC = () => {
   const { toast } = useToast();
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
@@ -50,9 +68,6 @@ const AuditTrail: React.FC = () => {
         if (profile && profile.full_name) {
           setCurrentUser(profile.full_name);
         }
-        
-        // Fetch sales records to use as audit trail
-        await fetchAuditRecords();
       } catch (error: any) {
         console.error('Error fetching user data:', error);
         toast({
@@ -60,85 +75,25 @@ const AuditTrail: React.FC = () => {
           description: `Failed to load user data: ${error.message || "Unknown error"}`,
           variant: "destructive",
         });
+      } finally {
+        setIsLoading(false);
       }
     }
     
     fetchUserData();
     
-    // Set up a subscription to listen for changes in sales table
-    const salesSubscription = supabase
-      .channel('sales-changes')
-      .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'sales' }, 
-        (payload) => {
-          console.log('Sales record added:', payload);
-          handleSalesChange(payload.new, 'ADDED');
-        }
-      )
-      .on('postgres_changes', 
-        { event: 'UPDATE', schema: 'public', table: 'sales' }, 
-        (payload) => {
-          console.log('Sales record updated:', payload);
-          handleSalesChange(payload.new, 'EDITED');
-        }
-      )
-      .on('postgres_changes', 
-        { event: 'DELETE', schema: 'public', table: 'sales' }, 
-        (payload) => {
-          console.log('Sales record deleted:', payload.old);
-          handleSalesChange(payload.old, 'DELETED');
-        }
-      )
-      .subscribe();
+    // Subscribe to audit store changes
+    const unsubscribe = auditStore.subscribe((records) => {
+      setAuditRecords(records);
+    });
+    
+    // Set initial records
+    setAuditRecords(auditStore.records);
     
     return () => {
-      salesSubscription.unsubscribe();
+      unsubscribe();
     };
   }, [toast]);
-  
-  // Function to handle sales changes in real-time
-  const handleSalesChange = async (record: any, action: 'ADDED' | 'EDITED' | 'DELETED') => {
-    try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      
-      let username = user.email || user.id;
-      
-      // Check if user has profile with full_name
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .single();
-      
-      if (profile && profile.full_name) {
-        username = profile.full_name;
-      }
-      
-      // Create new audit record
-      const newAuditRecord: AuditRecord = {
-        id: `${Date.now()}`,
-        sale_id: record.transno,
-        action: action,
-        user_id: user.id,
-        username: username,
-        timestamp: new Date().toLocaleString()
-      };
-      
-      // Update local state with the new record at the beginning of the array (newest first)
-      setAuditRecords(prev => [newAuditRecord, ...prev]);
-    } catch (error) {
-      console.error('Error handling sales change:', error);
-    }
-  };
-  
-  async function fetchAuditRecords() {
-    setIsLoading(true);
-    // Initially, there should be no audit records until actions are performed
-    setAuditRecords([]);
-    setIsLoading(false);
-  }
   
   // Get badge color based on action
   const getBadgeVariant = (action: string): "default" | "destructive" | "secondary" | "outline" => {
