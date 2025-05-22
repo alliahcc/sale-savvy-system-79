@@ -157,24 +157,22 @@ const AuditTrail: React.FC = () => {
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="bg-background sticky top-0 z-20">SalesTrans</TableHead>
+                  <TableHead className="bg-background sticky top-0 z-20">Status</TableHead>
                   {isAdmin && (
-                    <>
-                      <TableHead className="bg-background sticky top-0 z-20">Status</TableHead>
-                      <TableHead className="bg-background sticky top-0 z-20">Stamp</TableHead>
-                    </>
+                    <TableHead className="bg-background sticky top-0 z-20">Stamp</TableHead>
                   )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={isAdmin ? 3 : 1} className="text-center py-10">
+                    <TableCell colSpan={isAdmin ? 3 : 2} className="text-center py-10">
                       Loading audit trail...
                     </TableCell>
                   </TableRow>
                 ) : auditRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isAdmin ? 3 : 1} className="text-center py-10">
+                    <TableCell colSpan={isAdmin ? 3 : 2} className="text-center py-10">
                       No audit records found
                     </TableCell>
                   </TableRow>
@@ -182,22 +180,20 @@ const AuditTrail: React.FC = () => {
                   auditRecords.map((record) => (
                     <TableRow key={record.id}>
                       <TableCell>{record.sale_id}</TableCell>
+                      <TableCell>
+                        <Badge variant={getBadgeVariant(record.action)}>
+                          {record.action}
+                        </Badge>
+                      </TableCell>
                       {isAdmin && (
-                        <>
-                          <TableCell>
-                            <Badge variant={getBadgeVariant(record.action)}>
-                              {record.action}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{record.username}</span>
-                              <span className="text-sm text-gray-500">
-                                {record.timestamp}
-                              </span>
-                            </div>
-                          </TableCell>
-                        </>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{record.username}</span>
+                            <span className="text-sm text-gray-500">
+                              {record.timestamp}
+                            </span>
+                          </div>
+                        </TableCell>
                       )}
                     </TableRow>
                   ))
